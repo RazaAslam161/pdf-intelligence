@@ -1,0 +1,29 @@
+[project]
+name = "rag-pdf-chatbot"
+version = "0.1.0"
+description = "A Streamlit RAG chatbot for answering questions from uploaded PDFs with citations."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "RAG PDF Chatbot Contributors" },
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+exclude = [
+  ".git",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "__pycache__",
+  "chroma_db",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

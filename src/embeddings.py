@@ -1,0 +1,161 @@
+"""OpenAI embedding helpers."""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any, Protocol
+
+DEFAULT_EMBEDDING_BATCH_SIZE = 100
+MISSING_API_KEY_MESSAGE = (
+    "OPENAI_API_KEY is missing. Add it to your .env file before creating embeddings."
+)
+
+
+class EmbeddingSettings(Protocol):
+    """Settings fields required by the embedding service."""
+
+    openai_api_key: str | None
+    openai_base_url: str | None
+    openai_embedding_model: str
+
+
+class EmbeddingServiceError(RuntimeError):
+    """Raised when embeddings cannot be created."""
+
+
+class EmbeddingService:
+    """Reusable OpenAI embeddings service."""
+
+    def __init__(
+        self,
+        settings: EmbeddingSettings,
+        *,
+        client: Any | None = None,
+        batch_size: int = DEFAULT_EMBEDDING_BATCH_SIZE,
+    ) -> None:
+        """Create an embedding service from settings and an optional client."""
+        api_key = settings.openai_api_key
+        base_url = getattr(settings, "openai_base_url", None)
+        if client is None and not api_key:
+            raise EmbeddingServiceError(MISSING_API_KEY_MESSAGE)
+        if client is None:
+            _validate_openai_compatible_settings(str(api_key), base_url)
+        if batch_size <= 0:
+            raise ValueError("batch_size must be greater than 0.")
+
+        self._model = settings.openai_embedding_model
+        self._batch_size = batch_size
+        self._client = client or _create_openai_client(
+            str(api_key),
+            base_url=base_url,
+        )
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """Create embeddings for texts while preserving input order."""
+        _validate_texts(texts)
+        if not texts:
+            return []
+
+        embeddings: list[list[float]] = []
+        for batch in _batched(texts, self._batch_size):
+            embeddings.extend(self._embed_batch(batch))
+        return embeddings
+
+    def _embed_batch(self, batch: list[str]) -> list[list[float]]:
+        """Create embeddings for one batch of text."""
+        try:
+            response = self._client.embeddings.create(
+                model=self._model,
+                input=batch,
+            )
+            embeddings = _extract_embeddings(response)
+        except Exception as exc:
+            raise EmbeddingServiceError(
+                "Failed to create embeddings with the OpenAI API."
+            ) from exc
+
+        if len(embeddings) != len(batch):
+            raise EmbeddingServiceError(
+                "OpenAI returned an unexpected number of embeddings."
+            )
+
+        return embeddings
+
+
+def embed_texts(
+    texts: Sequence[str],
+    model: str,
+    *,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    client: Any | None = None,
+) -> list[list[float]]:
+    """Backward-compatible helper for creating embeddings."""
+
+    class _Settings:
+        openai_api_key = api_key
+        openai_base_url = base_url
+        openai_embedding_model = model
+
+    return EmbeddingService(_Settings(), client=client).embed_texts(list(texts))
+
+
+def _create_openai_client(api_key: str, *, base_url: str | None = None) -> Any:
+    """Create the OpenAI SDK client only when needed."""
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise EmbeddingServiceError(
+            "The openai package is not installed. "
+            "Run `pip install -r requirements.txt`."
+        ) from exc
+
+    if base_url:
+        return OpenAI(api_key=api_key, base_url=base_url)
+    return OpenAI(api_key=api_key)
+
+
+def _validate_openai_compatible_settings(
+    api_key: str,
+    base_url: str | None,
+) -> None:
+    """Prevent provider keys from being sent to the wrong endpoint."""
+    if _looks_like_openrouter_key(api_key) and not _is_openrouter_base_url(base_url):
+        raise EmbeddingServiceError(
+            "OpenRouter API key detected. Set "
+            "OPENAI_BASE_URL=https://openrouter.ai/api/v1 and use an OpenRouter "
+            "embedding model such as openai/text-embedding-3-small."
+        )
+
+
+def _looks_like_openrouter_key(api_key: str) -> bool:
+    """Return whether an API key appears to be an OpenRouter key."""
+    return api_key.strip().startswith("sk-or-")
+
+
+def _is_openrouter_base_url(base_url: str | None) -> bool:
+    """Return whether a base URL points at OpenRouter."""
+    return bool(base_url and "openrouter.ai/api/v1" in base_url.lower())
+
+
+def _validate_texts(texts: Sequence[str]) -> None:
+    """Validate embedding input before sending it to the API."""
+    for index, text in enumerate(texts):
+        if not isinstance(text, str):
+            raise TypeError(f"texts[{index}] must be a string.")
+        if not text.strip():
+            raise ValueError("texts must not contain empty strings.")
+
+
+def _batched(texts: Sequence[str], batch_size: int) -> list[list[str]]:
+    """Split texts into request-sized batches."""
+    return [
+        list(texts[index : index + batch_size])
+        for index in range(0, len(texts), batch_size)
+    ]
+
+
+def _extract_embeddings(response: Any) -> list[list[float]]:
+    """Extract embeddings from an OpenAI SDK response."""
+    data = sorted(response.data, key=lambda item: getattr(item, "index", 0))
+    return [list(item.embedding) for item in data]
