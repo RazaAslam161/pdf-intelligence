@@ -20,6 +20,10 @@ exclude = [
   "chroma_db",
 ]
 
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 

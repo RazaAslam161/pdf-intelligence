@@ -28,6 +28,10 @@ def get_tenant_id(x_tenant_id: str | None = Header(default=None)) -> str:
     return tenant or DEFAULT_TENANT
 
 
+# Settings is a frozen dataclass; its read-only fields satisfy the settings
+# Protocols structurally, but mypy treats Protocol attributes as mutable, so the
+# concrete-frozen -> Protocol construction needs an explicit nudge (read-only by
+# design — nothing writes back through the protocol).
 @lru_cache(maxsize=1)
 def get_vector_store() -> VectorStore:
     """Return the process-wide singleton vector store.
@@ -36,10 +40,10 @@ def get_vector_store() -> VectorStore:
     path is seen by the other (no stale collection handle), and so reading or
     clearing the store needs no OpenAI key.
     """
-    return VectorStore(get_settings())
+    return VectorStore(get_settings())  # type: ignore[arg-type]
 
 
 @lru_cache(maxsize=1)
 def get_rag_service() -> RAGService:
     """Return a process-wide singleton RAG service over the shared vector store."""
-    return RAGService(get_settings(), vector_store=get_vector_store())
+    return RAGService(get_settings(), vector_store=get_vector_store())  # type: ignore[arg-type]

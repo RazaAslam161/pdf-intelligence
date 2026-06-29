@@ -98,24 +98,6 @@ class EmbeddingService:
         return embeddings
 
 
-def embed_texts(
-    texts: Sequence[str],
-    model: str,
-    *,
-    api_key: str | None = None,
-    base_url: str | None = None,
-    client: Any | None = None,
-) -> list[list[float]]:
-    """Backward-compatible helper for creating embeddings."""
-
-    class _Settings:
-        openai_api_key = api_key
-        openai_base_url = base_url
-        openai_embedding_model = model
-
-    return EmbeddingService(_Settings(), client=client).embed_texts(list(texts))
-
-
 def _create_openai_client(
     api_key: str,
     *,
