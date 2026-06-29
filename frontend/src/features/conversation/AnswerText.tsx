@@ -8,6 +8,12 @@ export interface AnswerTextProps {
   sourceCount: number;
   /** Zero-based index of the currently highlighted source, or null. */
   activeIndex: number | null;
+  /**
+   * True while tokens are still streaming in. Renders a trailing caret and an
+   * SR-only status so the in-progress answer is announced. During streaming
+   * `sourceCount` is 0, so markers render as plain text until sources arrive.
+   */
+  streaming?: boolean;
   /** Hover/focus/click a marker -> activate that source. */
   onMarkerActivate: (index: number) => void;
   /** Hover-out / blur a marker -> clear the transient highlight. */
@@ -20,12 +26,13 @@ export interface AnswerTextProps {
  * Renders an assistant answer as prose with inline citation markers. Each in-
  * range `[n]` becomes a superscript <button> (mono, accent) placed exactly
  * where it occurs; out-of-range markers render as plain text. Surrounding prose
- * is rendered verbatim.
+ * is rendered verbatim. While `streaming`, a blinking caret trails the text.
  */
 export function AnswerText({
   answer,
   sourceCount,
   activeIndex,
+  streaming = false,
   onMarkerActivate,
   onMarkerDeactivate,
   onMarkerSelect,
@@ -57,6 +64,14 @@ export function AnswerText({
           </sup>
         );
       })}
+      {streaming ? (
+        <>
+          <span className={styles.caret} aria-hidden="true" />
+          <span className={styles.srOnly} role="status">
+            Generating answer
+          </span>
+        </>
+      ) : null}
     </p>
   );
 }

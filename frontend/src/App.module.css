@@ -1,0 +1,31 @@
+/* Host for the chat view inside AppShell's main column. Preserves the original
+   full-height flex context so ChatThread (height:100%) lays out exactly as it
+   did before the view toggle was introduced. [hidden] collapses it when the
+   documents panel is open. */
+.chatHost {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chatHost[hidden] {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .chatHost {
+    height: auto;
+  }
+}
+
+/* Documents view: stacks the upload panel over the live store panel, sharing
+   the upload panel's column width so they align. */
+.documentsHost {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}

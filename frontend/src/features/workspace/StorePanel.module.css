@@ -1,0 +1,87 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+/* Inline destructive confirm — neutral hairline, no color signal. */
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.confirmText {
+  font-size: var(--fs-small);
+  color: var(--color-text);
+}
+
+/* Readiness summaries: meaning carried by icon + text, never color. Ready and
+   empty differ in icon and wording (and a slightly stronger border for ready)
+   so they are distinguishable without relying on hue. */
+.summaryReady,
+.summaryEmpty {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-small);
+  line-height: var(--lh-body);
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-raised);
+}
+
+.summaryEmpty {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+.summaryIcon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+.summaryIcon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* Calm load / error status lines. */
+.status {
+  font-size: var(--fs-small);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+}
+
+.problem {
+  composes: status;
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-raised);
+}

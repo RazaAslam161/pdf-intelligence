@@ -35,6 +35,8 @@ export const MarginSlip = forwardRef<HTMLLIElement, MarginSlipProps>(
       <li
         ref={ref}
         className={active ? styles.slipActive : styles.slip}
+        tabIndex={0}
+        aria-label={`Source ${number}: ${source.file_name}, page ${source.page_number}`}
         onMouseEnter={onActivate}
         onMouseLeave={onDeactivate}
         onFocus={onActivate}

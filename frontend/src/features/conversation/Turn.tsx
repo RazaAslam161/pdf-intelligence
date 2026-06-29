@@ -55,6 +55,7 @@ export function Turn({
             answer={turn.content}
             sourceCount={turn.sources.length}
             activeIndex={isActiveTurn ? activeIndex : null}
+            streaming={turn.status === "streaming"}
             onMarkerActivate={(index) => onMarkerActivate(turn.id, index)}
             onMarkerDeactivate={onMarkerDeactivate}
             onMarkerSelect={(index) => onMarkerSelect(turn.id, index)}

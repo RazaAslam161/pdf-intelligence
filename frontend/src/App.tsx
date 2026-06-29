@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { AppShell } from "./components/AppShell/AppShell";
+import { Button } from "./components/Button/Button";
 import { ChatThread } from "./features/conversation/ChatThread";
 import {
   nextTurnId,
@@ -7,23 +8,60 @@ import {
   type ConversationTurn,
 } from "./features/conversation/state";
 import { SourceRail } from "./features/sources/SourceRail";
-import { ApiError, ask } from "./lib/api";
+import { UploadPanel } from "./features/upload/UploadPanel";
+import { StorePanel } from "./features/workspace/StorePanel";
+import { useStore } from "./features/workspace/useStore";
+import { readinessLabel } from "./features/workspace/summary";
+import { askStream, type AskStreamHandlers } from "./lib/api";
 import { SAMPLE_ASK_RESPONSE } from "./lib/sampleData";
-import type { AskResponse } from "./lib/types";
+import type { Source } from "./lib/types";
+import styles from "./App.module.css";
+
+type View = "chat" | "documents";
 
 /**
  * Dev-only fallback: when VITE_API_BASE is unset we have no backend to talk to,
- * so return a canned response for local visual development. The DEFAULT path
- * (VITE_API_BASE set) always calls the real api.ask().
+ * so SIMULATE streaming from the canned sample (a few chunks over time) for
+ * local visual development. The DEFAULT path (VITE_API_BASE set) always calls
+ * the real streaming api.askStream().
  */
 const USE_SAMPLE = import.meta.env.VITE_API_BASE === undefined;
 
-async function fetchAnswer(question: string): Promise<AskResponse> {
-  if (USE_SAMPLE) {
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    return SAMPLE_ASK_RESPONSE;
+/** Split the sample answer into a handful of chunks for simulated streaming. */
+function sampleChunks(answer: string, parts = 6): string[] {
+  if (parts <= 1) return [answer];
+  const size = Math.ceil(answer.length / parts);
+  const chunks: string[] = [];
+  for (let i = 0; i < answer.length; i += size) {
+    chunks.push(answer.slice(i, i + size));
   }
-  return ask(question);
+  return chunks;
+}
+
+/**
+ * Dev simulation of askStream: emit the SAMPLE answer in chunks over time so
+ * local dev shows progressive rendering, then deliver sources and finish.
+ * Mirrors askStream's contract (tokens first, sources near the end).
+ */
+function simulateStream(
+  handlers: Pick<AskStreamHandlers, "onToken" | "onSources" | "onError">,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const chunks = sampleChunks(SAMPLE_ASK_RESPONSE.answer);
+    let i = 0;
+    const tick = () => {
+      if (i < chunks.length) {
+        handlers.onToken(chunks[i]);
+        i += 1;
+        setTimeout(tick, 120);
+        return;
+      }
+      // Sources arrive only after all tokens (matching the real backend).
+      handlers.onSources(SAMPLE_ASK_RESPONSE.sources as Source[]);
+      resolve();
+    };
+    setTimeout(tick, 200);
+  });
 }
 
 export default function App() {
@@ -34,6 +72,13 @@ export default function App() {
   // to the latest assistant turn). `sourceIndex` is the transient highlight
   // from hover/focus.
   const [active, setActive] = useState<ActiveSource | null>(null);
+  // Which surface fills the main column. The chat stays mounted (just hidden)
+  // when the documents panel is open so the conversation is never reset.
+  const [view, setView] = useState<View>("chat");
+
+  // The live persisted document store (across sessions). Fetched on mount;
+  // refreshed after an upload batch and immediately after a clear.
+  const store = useStore();
 
   const updateTurn = useCallback(
     (id: string, patch: Partial<ConversationTurn>) => {
@@ -65,24 +110,55 @@ export default function App() {
       setTurns((prev) => [...prev, userTurn, pendingTurn]);
       setBusy(true);
 
-      try {
-        const res = await fetchAnswer(question);
-        updateTurn(assistantId, {
-          content: res.answer,
-          sources: res.sources,
-          status: "complete",
-        });
-        // The latest assistant turn becomes the active source set.
+      // Track whether an error was reported so completion doesn't override it.
+      let errored = false;
+
+      // Append a token delta to this turn's content, flipping it from "pending"
+      // to "streaming" so the answer renders progressively with a caret.
+      const onToken = (text: string) => {
+        setTurns((prev) =>
+          prev.map((t) =>
+            t.id === assistantId
+              ? { ...t, content: t.content + text, status: "streaming" }
+              : t,
+          ),
+        );
+      };
+
+      // Sources arrive once near the end: attach them and make this turn the
+      // active source set so margin slips populate AFTER the stream.
+      const onSources = (sources: Source[]) => {
+        updateTurn(assistantId, { sources });
         setActive({ turnId: assistantId, sourceIndex: null });
-      } catch (err) {
-        const message =
-          err instanceof ApiError
-            ? `Request failed (${err.status}). ${err.message}`
-            : err instanceof Error
-              ? err.message
-              : "Unable to reach the backend.";
+      };
+
+      const onError = (message: string) => {
+        errored = true;
         updateTurn(assistantId, { status: "error", error: message });
+      };
+
+      try {
+        if (USE_SAMPLE) {
+          await simulateStream({ onToken, onSources, onError });
+        } else {
+          await askStream(question, { onToken, onSources, onError });
+        }
+      } catch (err) {
+        // askStream resolves on failure (it routes errors through onError), so
+        // this only guards against an unexpected throw.
+        onError(err instanceof Error ? err.message : "Unable to reach the backend.");
       } finally {
+        if (!errored) {
+          updateTurn(assistantId, { status: "complete" });
+          // The latest assistant turn becomes the active source set even when
+          // it has no citations (mirrors the pre-streaming behaviour); if a
+          // sources event already ran this is a harmless no-op.
+          setActive((prev) =>
+            prev?.turnId === assistantId
+              ? prev
+              : { turnId: assistantId, sourceIndex: null },
+          );
+        }
         setBusy(false);
       }
     },
@@ -122,23 +198,61 @@ export default function App() {
     return turn?.sources ?? [];
   }, [active, turns]);
 
+  const documentsOpen = view === "documents";
+
+  // Quiet header status: surface store readiness once it has loaded; fall back
+  // to a neutral "ready" while it is still loading or could not load.
+  const headerStatus =
+    store.state !== null ? readinessLabel(store.state) : "ready";
+
   return (
-    <AppShell status="ready" rail={
-      <SourceRail
-        sources={activeSources}
-        activeIndex={active?.sourceIndex ?? null}
-        onActiveIndexChange={handleRailIndexChange}
-      />
-    }>
-      <ChatThread
-        turns={turns}
-        active={active}
-        busy={busy}
-        onSubmit={handleSubmit}
-        onMarkerActivate={handleMarkerActivate}
-        onMarkerDeactivate={handleMarkerDeactivate}
-        onMarkerSelect={handleMarkerSelect}
-      />
+    <AppShell
+      status={headerStatus}
+      headerActions={
+        <Button
+          variant="default"
+          aria-pressed={documentsOpen}
+          onClick={() => setView(documentsOpen ? "chat" : "documents")}
+        >
+          {documentsOpen ? "Back to chat" : "Add documents"}
+        </Button>
+      }
+      rail={
+        <SourceRail
+          sources={activeSources}
+          activeIndex={active?.sourceIndex ?? null}
+          onActiveIndexChange={handleRailIndexChange}
+        />
+      }
+    >
+      {/* Keep the chat mounted (hidden) while documents is open so the
+          conversation is never reset when toggling views. */}
+      <div className={styles.chatHost} hidden={documentsOpen}>
+        <ChatThread
+          turns={turns}
+          active={active}
+          busy={busy}
+          onSubmit={handleSubmit}
+          onMarkerActivate={handleMarkerActivate}
+          onMarkerDeactivate={handleMarkerDeactivate}
+          onMarkerSelect={handleMarkerSelect}
+        />
+      </div>
+      {documentsOpen ? (
+        <div className={styles.documentsHost}>
+          <UploadPanel
+            onClose={() => setView("chat")}
+            onBatchComplete={store.refresh}
+          />
+          <StorePanel
+            state={store.state}
+            phase={store.phase}
+            error={store.error}
+            clearing={store.clearing}
+            onClear={store.clear}
+          />
+        </div>
+      ) : null}
     </AppShell>
   );
 }

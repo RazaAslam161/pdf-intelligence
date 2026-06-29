@@ -10,8 +10,15 @@ import type { Source } from "../../lib/types";
 
 export type TurnRole = "user" | "assistant";
 
-/** Lifecycle of an assistant turn while its answer is being fetched. */
-export type TurnStatus = "pending" | "complete" | "error";
+/**
+ * Lifecycle of an assistant turn while its answer is being fetched:
+ *  - "pending": request sent, no tokens have arrived yet (shows the dots).
+ *  - "streaming": tokens are arriving and the answer renders progressively
+ *    with a caret; sources have not arrived yet.
+ *  - "complete": the stream finished (answer + any sources are final).
+ *  - "error": generation or transport failed.
+ */
+export type TurnStatus = "pending" | "streaming" | "complete" | "error";
 
 export interface ConversationTurn {
   id: string;

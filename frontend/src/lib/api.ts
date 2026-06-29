@@ -1,17 +1,27 @@
 /*
  * Typed API client for the FastAPI backend.
  *
- * NOTE: The backend is not built yet. These functions describe the planned
- * contract and are not called at runtime in this milestone (B3). They exist so
- * later milestones can wire up chat and indexing without re-deriving the shapes.
+ * POST /ask streams its answer as Server-Sent Events (text/event-stream); the
+ * other endpoints return plain JSON. The chat client therefore uses the
+ * streaming `askStream()` (below); the JSON endpoints use `parseJson()`.
  */
 import type {
-  AskResponse,
+  ConfigResponse,
   HealthResponse,
   IndexResponse,
+  Source,
+  StoreState,
 } from "./types";
+import { parseSseChunk } from "./sse";
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+
+/**
+ * Optional tenant id sent as the X-Tenant-Id header on /ask. Driven by an env
+ * var so a single build can target multiple tenants; omitted entirely when
+ * unset (no empty header is sent).
+ */
+const TENANT_ID: string | undefined = import.meta.env.VITE_TENANT_ID;
 
 /** Error thrown when the backend responds with a non-2xx status. */
 export class ApiError extends Error {
@@ -35,14 +45,124 @@ async function parseJson<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** POST /ask — submit a question, receive an answer with grounding sources. */
-export async function ask(question: string): Promise<AskResponse> {
-  const response = await fetch(`${API_BASE}/ask`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
-  });
-  return parseJson<AskResponse>(response);
+/** Callbacks invoked as the /ask SSE stream is consumed. */
+export interface AskStreamHandlers {
+  /** A token delta to append to the in-progress answer (called repeatedly). */
+  onToken: (text: string) => void;
+  /** The grounding sources, delivered once near the end of the stream. */
+  onSources: (sources: Source[]) => void;
+  /** A generation error from the server, or a transport failure. */
+  onError: (message: string) => void;
+  /** Abort the request (e.g. on unmount) by aborting this signal. */
+  signal?: AbortSignal;
+}
+
+/**
+ * POST /ask — submit a question and consume the streamed answer.
+ *
+ * The backend responds with `text/event-stream`; tokens arrive progressively,
+ * the grounding sources arrive once near the end, then a terminal `done` (or
+ * `error`) event. This reads the response body with a streaming reader, decodes
+ * UTF-8 incrementally, splits complete SSE records via the pure `parseSseChunk`
+ * helper, and dispatches each event to the matching handler.
+ *
+ * Resolves when the stream ends cleanly (a `done` event or the body closing).
+ * Server `error` events and transport/HTTP failures are reported via
+ * `onError` and also resolve (so the caller's completion logic runs once); an
+ * AbortError is swallowed silently.
+ */
+export async function askStream(
+  question: string,
+  handlers: AskStreamHandlers,
+): Promise<void> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  };
+  if (TENANT_ID) headers["X-Tenant-Id"] = TENANT_ID;
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/ask`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ question }),
+      signal: handlers.signal,
+    });
+  } catch (err) {
+    if (isAbort(err)) return;
+    handlers.onError(
+      err instanceof Error ? err.message : "Unable to reach the backend.",
+    );
+    return;
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    handlers.onError(
+      `Request failed (${response.status}). ${text || "The server returned an error."}`,
+    );
+    return;
+  }
+
+  if (!response.body) {
+    handlers.onError("The server returned an empty response.");
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        const { events, rest } = parseSseChunk(buffer);
+        buffer = rest;
+        for (const event of events) {
+          switch (event.type) {
+            case "token":
+              handlers.onToken(event.text);
+              break;
+            case "sources":
+              handlers.onSources(event.sources);
+              break;
+            case "error":
+              handlers.onError(event.message);
+              return;
+            case "done":
+              return;
+          }
+        }
+      }
+      if (done) {
+        // Flush any complete record left in the buffer at stream end.
+        const tail = buffer + decoder.decode();
+        const { events } = parseSseChunk(tail.endsWith("\n\n") ? tail : `${tail}\n\n`);
+        for (const event of events) {
+          if (event.type === "token") handlers.onToken(event.text);
+          else if (event.type === "sources") handlers.onSources(event.sources);
+          else if (event.type === "error") {
+            handlers.onError(event.message);
+            return;
+          }
+        }
+        return;
+      }
+    }
+  } catch (err) {
+    if (isAbort(err)) return;
+    handlers.onError(
+      err instanceof Error ? err.message : "The answer stream was interrupted.",
+    );
+  }
+}
+
+/** True when an error is the DOMException raised by aborting a fetch. */
+function isAbort(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
 }
 
 /** POST /index — upload one or more PDFs to be indexed (multipart). */
@@ -62,4 +182,22 @@ export async function indexPdfs(files: File[]): Promise<IndexResponse> {
 export async function health(): Promise<HealthResponse> {
   const response = await fetch(`${API_BASE}/health`, { method: "GET" });
   return parseJson<HealthResponse>(response);
+}
+
+/** GET /config — server-advertised upload limits (size, pages, file count). */
+export async function getConfig(): Promise<ConfigResponse> {
+  const response = await fetch(`${API_BASE}/config`, { method: "GET" });
+  return parseJson<ConfigResponse>(response);
+}
+
+/** GET /documents — the live persisted vector store (across sessions). */
+export async function getDocuments(): Promise<StoreState> {
+  const response = await fetch(`${API_BASE}/documents`, { method: "GET" });
+  return parseJson<StoreState>(response);
+}
+
+/** DELETE /documents — wipe the store; resolves to the post-clear state. */
+export async function clearDocuments(): Promise<StoreState> {
+  const response = await fetch(`${API_BASE}/documents`, { method: "DELETE" });
+  return parseJson<StoreState>(response);
 }
