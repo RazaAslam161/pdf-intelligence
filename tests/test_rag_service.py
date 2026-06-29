@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.models import RetrievedChunk, TextChunk
+from src.models import RagAnswer, RetrievedChunk, TextChunk
 from src.rag_service import (
     NO_CONTEXT_ANSWER,
     IndexingLimitError,
@@ -115,12 +115,12 @@ def test_index_pdf_extracts_chunks_embeds_and_stores() -> None:
         openai_client=FakeOpenAIClient(),
     )
 
-    summary = service.index_pdf(_simple_pdf_bytes(), "sample.pdf")
+    result = service.index_pdf(_simple_pdf_bytes(), "sample.pdf")
 
-    assert summary["file_name"] == "sample.pdf"
-    assert summary["page_count"] == 1
-    assert summary["chunk_count"] == 1
-    assert isinstance(summary["document_id"], str)
+    assert result.file_name == "sample.pdf"
+    assert result.page_count == 1
+    assert result.chunk_count == 1
+    assert isinstance(result.document_id, str)
     assert embeddings.calls == [["Hello from PDF"]]
     assert vector_store.added_chunks[0].file_name == "sample.pdf"
     assert vector_store.added_chunks[0].page_number == 1
@@ -153,15 +153,11 @@ def test_answer_question_retrieves_context_and_calls_openai() -> None:
 
     result = service.answer_question("What is the refund window?")
 
-    assert result["answer"] == "The answer is in the PDF."
-    assert result["sources"] == [
-        {
-            "label": "[Source 1] source.pdf, page 3",
-            "file_name": "source.pdf",
-            "page_number": 3,
-            "preview": "The refund window is 30 days.",
-        }
-    ]
+    assert result.answer == "The answer is in the PDF."
+    assert len(result.sources) == 1
+    assert result.sources[0].chunk.file_name == "source.pdf"
+    assert result.sources[0].chunk.page_number == 3
+    assert result.sources[0].chunk.text == "The refund window is 30 days."
     assert embeddings.calls == [["What is the refund window?"]]
     assert vector_store.search_calls == [([1.0, 0.0], 2)]
     assert openai_client.chat.completions.calls[0]["model"] == "test-chat-model"
@@ -220,6 +216,16 @@ def test_build_grounded_prompt_lists_multiple_sources() -> None:
     assert "[Source 2: second.pdf, page 5]" in prompt
 
 
+def test_build_grounded_prompt_requests_inline_citations() -> None:
+    """The prompt instructs the model to cite supporting sentences inline as [n]."""
+    retrieved = [RetrievedChunk(chunk=_text_chunk("a"))]
+
+    prompt = build_grounded_prompt("How does it work?", retrieved)
+
+    assert "cite" in prompt.lower()
+    assert "[1]" in prompt
+
+
 def test_answer_question_returns_no_context_message_without_results() -> None:
     """No retrieval results should return the grounded fallback answer."""
     service = RAGService(
@@ -231,10 +237,7 @@ def test_answer_question_returns_no_context_message_without_results() -> None:
 
     result = service.answer_question("Unknown?")
 
-    assert result == {
-        "answer": "I could not find the answer in the uploaded documents.",
-        "sources": [],
-    }
+    assert result == RagAnswer(answer=NO_CONTEXT_ANSWER, sources=[])
 
 
 def test_answer_question_wraps_generation_failures() -> None:
@@ -298,7 +301,7 @@ def test_answer_question_drops_chunks_beyond_relevance_threshold() -> None:
 
     result = service.answer_question("Something off topic?")
 
-    assert result == {"answer": NO_CONTEXT_ANSWER, "sources": []}
+    assert result == RagAnswer(answer=NO_CONTEXT_ANSWER, sources=[])
 
 
 def test_answer_question_keeps_chunks_within_threshold() -> None:
@@ -326,8 +329,8 @@ def test_answer_question_keeps_chunks_within_threshold() -> None:
 
     result = service.answer_question("What is the refund window?")
 
-    assert result["answer"] == "The answer is in the PDF."
-    assert len(result["sources"]) == 1
+    assert result.answer == "The answer is in the PDF."
+    assert len(result.sources) == 1
 
 
 def test_filter_relevant_chunks_keeps_within_threshold_and_unscored() -> None:

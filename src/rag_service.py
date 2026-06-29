@@ -8,7 +8,7 @@ from typing import Any, Protocol
 from src.chunker import chunk_pages
 from src.citations import build_source_citations
 from src.embeddings import EmbeddingService
-from src.models import RetrievedChunk, TextChunk
+from src.models import IndexResult, RagAnswer, RetrievedChunk, TextChunk
 from src.pdf_loader import generate_document_id, load_pdf_pages
 from src.vector_store import VectorStore
 
@@ -16,7 +16,10 @@ GROUNDING_INSTRUCTIONS = (
     "You are a careful PDF question-answering assistant. "
     "Use only the provided PDF context. "
     "If the answer is not present in the context, say you could not find the "
-    "answer in the uploaded documents."
+    "answer in the uploaded documents. "
+    "When a sentence is supported by the context, cite the source inline with its "
+    "bracketed number, e.g. [1], matching the numbered sources you are given. "
+    "Only cite the numbered sources provided."
 )
 NO_CONTEXT_ANSWER = "I could not find the answer in the uploaded documents."
 
@@ -84,7 +87,7 @@ class RAGService:
         self.vector_store = vector_store or VectorStore(settings)
         self._openai_client = openai_client
 
-    def index_pdf(self, pdf_bytes: bytes, file_name: str) -> dict[str, int | str]:
+    def index_pdf(self, pdf_bytes: bytes, file_name: str) -> IndexResult:
         """Extract, chunk, embed, and store one uploaded PDF."""
         # Enforce the size cap before parsing so an oversized upload never
         # reaches pypdf or the paid embedding API.
@@ -111,14 +114,14 @@ class RAGService:
             file_name,
             pdf_bytes,
         )
-        return {
-            "file_name": file_name,
-            "document_id": document_id,
-            "page_count": len(pages),
-            "chunk_count": len(chunks),
-        }
+        return IndexResult(
+            file_name=file_name,
+            document_id=document_id,
+            page_count=len(pages),
+            chunk_count=len(chunks),
+        )
 
-    def answer_question(self, question: str) -> dict[str, Any]:
+    def answer_question(self, question: str) -> RagAnswer:
         """Answer a user question using retrieved PDF context."""
         clean_question = question.strip()
         if not clean_question:
@@ -142,15 +145,12 @@ class RAGService:
             self.settings.retrieval_max_distance,
         )
         if not relevant_chunks:
-            return {"answer": NO_CONTEXT_ANSWER, "sources": []}
+            return RagAnswer(answer=NO_CONTEXT_ANSWER, sources=[])
 
         prompt = build_grounded_prompt(clean_question, relevant_chunks)
         answer = self._generate_answer(prompt)
 
-        return {
-            "answer": answer,
-            "sources": build_sources(relevant_chunks),
-        }
+        return RagAnswer(answer=answer, sources=list(relevant_chunks))
 
     def _generate_answer(self, prompt: str) -> str:
         """Generate an answer with the OpenAI Chat Completions API."""
@@ -201,7 +201,9 @@ def build_grounded_prompt(
     return (
         "Answer only from the provided PDF context.\n"
         "If the answer is not in the context, say: "
-        '"I could not find the answer in the uploaded documents."\n\n'
+        '"I could not find the answer in the uploaded documents."\n'
+        "Cite each supported sentence inline with its source's bracketed number "
+        "(for example [1] for Source 1), using the numbers shown below.\n\n"
         f"Question:\n{question.strip()}\n\n"
         f"PDF context:\n{context}"
     )

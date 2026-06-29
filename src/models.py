@@ -50,4 +50,14 @@ class RagAnswer:
     sources: list[RetrievedChunk]
 
 
+@dataclass(frozen=True)
+class IndexResult:
+    """Outcome of indexing one PDF through the RAG service."""
+
+    file_name: str
+    document_id: str
+    page_count: int
+    chunk_count: int
+
+
 PdfPage = PageText

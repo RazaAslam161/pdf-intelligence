@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import os
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from src.rag_service import (
     IndexingLimitError,
     RAGService,
     RAGServiceError,
+    build_sources,
 )
 from src.vector_store import VectorStore, VectorStoreError
 
@@ -222,6 +224,16 @@ def build_chat_message(
         "content": content,
         "sources": sources or [],
     }
+
+
+def _esc(value: object) -> str:
+    """HTML-escape a dynamic value before interpolating into unsafe_allow_html.
+
+    Output-encoding policy (A3): every dynamic value rendered inside a raw-HTML
+    block is escaped at the interpolation point so document- or config-derived
+    text can never inject markup. The API tier never emits HTML at all.
+    """
+    return html.escape(str(value))
 
 
 def format_source_preview(text: str, max_chars: int = 220) -> str:
@@ -548,8 +560,8 @@ def _answer_chat_question(settings: Settings, raw_question: str) -> None:
                 _show_error("Something went wrong while answering.", exc)
                 return
 
-        answer = str(result.get("answer", "")).strip() or NO_CONTEXT_ANSWER
-        sources = list(result.get("sources", []))
+        answer = result.answer.strip() or NO_CONTEXT_ANSWER
+        sources = build_sources(result.sources)
         st.session_state["chat_messages"].append(
             build_chat_message("assistant", answer, sources=sources)
         )
@@ -611,13 +623,20 @@ def _index_uploaded_files(settings: Settings, uploaded_files: list[Any]) -> None
 
             status.info(f"Indexing {file_name}")
             try:
-                summary = rag_service.index_pdf(uploaded_file.getvalue(), file_name)
+                result = rag_service.index_pdf(uploaded_file.getvalue(), file_name)
             except IndexingLimitError as exc:
                 summaries.append(_rejected_summary(file_name, "rejected"))
                 st.warning(str(exc))
                 continue
-            summary["status"] = "indexed"
-            summaries.append(summary)
+            summaries.append(
+                {
+                    "file_name": result.file_name,
+                    "document_id": result.document_id,
+                    "page_count": result.page_count,
+                    "chunk_count": result.chunk_count,
+                    "status": "indexed",
+                }
+            )
             progress_bar.progress(
                 index / total_files,
                 text=f"Indexed {index} of {total_files} document(s)",
@@ -684,13 +703,13 @@ def _render_indexed_document_card(summary: dict[str, Any]) -> None:
         f"""
         <div class="pia-card document-card">
           <div>
-            <div class="pia-card-title">{file_name}</div>
+            <div class="pia-card-title">{_esc(file_name)}</div>
             <div class="pia-muted">
               {pages} page(s) processed · {chunks} searchable chunk(s)
             </div>
           </div>
           <span class="pia-pill {'ok' if chunks > 0 else 'warn'}">
-            {status_label}
+            {_esc(status_label)}
           </span>
         </div>
         """,
@@ -717,8 +736,8 @@ def _render_empty_state(title: str, body: str) -> None:
     st.markdown(
         f"""
         <div class="pia-card empty-state">
-          <div class="pia-card-title">{title}</div>
-          <p>{body}</p>
+          <div class="pia-card-title">{_esc(title)}</div>
+          <p>{_esc(body)}</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -797,18 +816,18 @@ def _status_card_html(
     """Build sidebar status card markup."""
     return f"""
     <div class="pia-card sidebar-card">
-      <div class="pia-card-title">{title}</div>
+      <div class="pia-card-title">{_esc(title)}</div>
       <div class="status-row">
-        <span>API</span><strong>{api_status}</strong>
+        <span>API</span><strong>{_esc(api_status)}</strong>
       </div>
       <div class="status-row">
-        <span>Answer model</span><strong>{model}</strong>
+        <span>Answer model</span><strong>{_esc(model)}</strong>
       </div>
       <div class="status-row">
-        <span>Stored chunks</span><strong>{indexed_chunks}</strong>
+        <span>Stored chunks</span><strong>{_esc(indexed_chunks)}</strong>
       </div>
       <div class="status-row">
-        <span>This session</span><strong>{session_chunks}</strong>
+        <span>This session</span><strong>{_esc(session_chunks)}</strong>
       </div>
     </div>
     """

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import pytest
 
 from app import (
+    _esc,
+    _status_card_html,
     aggregate_indexing_stats,
     build_chat_message,
     build_indexing_feedback,
@@ -161,6 +163,25 @@ def test_build_indexing_feedback_detects_scanned_pdf_case() -> None:
     assert feedback["level"] == "warning"
     assert "No extractable text" in feedback["message"]
     assert "scanned PDF" in feedback["message"]
+
+
+def test_esc_escapes_markup_metacharacters() -> None:
+    """A3: the escape helper neutralizes HTML metacharacters."""
+    assert _esc('<b>&"') == "&lt;b&gt;&amp;&quot;"
+
+
+def test_status_card_html_escapes_dynamic_values() -> None:
+    """A3: dynamic values in the unsafe_allow_html status card are escaped."""
+    markup = _status_card_html(
+        title="App ready",
+        api_status="Connected",
+        model="<script>alert(1)</script>",
+        indexed_chunks="3",
+        session_chunks="1",
+    )
+
+    assert "<script>" not in markup
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in markup
 
 
 def test_classify_user_error_handles_api_errors() -> None:

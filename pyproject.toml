@@ -23,6 +23,18 @@ exclude = [
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are evaluated once at import; the B008 warning
+# about function calls in argument defaults does not apply to them.
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "fastapi.File",
+  "fastapi.Form",
+  "fastapi.Query",
+  "fastapi.Body",
+  "fastapi.Header",
+]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
