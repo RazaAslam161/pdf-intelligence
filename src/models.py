@@ -60,4 +60,14 @@ class IndexResult:
     chunk_count: int
 
 
+@dataclass(frozen=True)
+class DocumentSummary:
+    """Aggregate of one document currently held in the vector store."""
+
+    document_id: str
+    file_name: str
+    page_count: int
+    chunk_count: int
+
+
 PdfPage = PageText

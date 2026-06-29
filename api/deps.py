@@ -9,11 +9,37 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from fastapi import Header
+
 from src.config import get_settings
 from src.rag_service import RAGService
+from src.vector_store import DEFAULT_TENANT, VectorStore
+
+
+def get_tenant_id(x_tenant_id: str | None = Header(default=None)) -> str:
+    """AUTH STUB (A8): derive the caller's tenant from the X-Tenant-Id header.
+
+    Defaults to the shared single-tenant namespace when absent. This is a
+    placeholder: before any multi-user deployment, replace it with real
+    authentication that derives identity server-side (session / JWT), never from
+    a client-supplied header.
+    """
+    tenant = (x_tenant_id or "").strip()
+    return tenant or DEFAULT_TENANT
+
+
+@lru_cache(maxsize=1)
+def get_vector_store() -> VectorStore:
+    """Return the process-wide singleton vector store.
+
+    Shared by the RAG service and the workspace endpoints so a clear from one
+    path is seen by the other (no stale collection handle), and so reading or
+    clearing the store needs no OpenAI key.
+    """
+    return VectorStore(get_settings())
 
 
 @lru_cache(maxsize=1)
 def get_rag_service() -> RAGService:
-    """Return a process-wide singleton RAG service."""
-    return RAGService(get_settings())
+    """Return a process-wide singleton RAG service over the shared vector store."""
+    return RAGService(get_settings(), vector_store=get_vector_store())

@@ -7,9 +7,13 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, Protocol
 
-from src.models import RetrievedChunk, TextChunk
+from src.models import DocumentSummary, RetrievedChunk, TextChunk
 
 DEFAULT_COLLECTION_NAME = "pdf_chunks"
+# Tenant isolation (A8): every chunk carries a tenant_id in its metadata and all
+# reads/writes/deletes are scoped to it via a Chroma `where` filter. The default
+# tenant is the single-tenant namespace used when no caller identity is supplied.
+DEFAULT_TENANT = "default"
 
 
 class VectorStoreSettings(Protocol):
@@ -41,8 +45,10 @@ class VectorStore:
         self,
         chunks: Sequence[TextChunk],
         embeddings: Sequence[Sequence[float]],
+        *,
+        tenant_id: str = DEFAULT_TENANT,
     ) -> None:
-        """Store chunks and embeddings, using chunk_id to avoid duplicates."""
+        """Store chunks under the tenant, using chunk_id to avoid duplicates."""
         chunk_list = list(chunks)
         embedding_list = [list(embedding) for embedding in embeddings]
         _validate_chunks_and_embeddings(chunk_list, embedding_list)
@@ -52,10 +58,12 @@ class VectorStore:
 
         try:
             self._collection.upsert(
-                ids=[chunk.chunk_id for chunk in chunk_list],
+                ids=[_scoped_id(chunk.chunk_id, tenant_id) for chunk in chunk_list],
                 embeddings=embedding_list,
                 documents=[chunk.text for chunk in chunk_list],
-                metadatas=[_metadata_from_chunk(chunk) for chunk in chunk_list],
+                metadatas=[
+                    _metadata_from_chunk(chunk, tenant_id) for chunk in chunk_list
+                ],
             )
         except Exception as exc:
             raise VectorStoreError("Failed to store chunks in ChromaDB.") from exc
@@ -64,8 +72,10 @@ class VectorStore:
         self,
         query_embedding: Sequence[float],
         top_k: int,
+        *,
+        tenant_id: str = DEFAULT_TENANT,
     ) -> list[RetrievedChunk]:
-        """Return the most relevant stored chunks for a query embedding."""
+        """Return the most relevant chunks for a query, scoped to the tenant."""
         if top_k <= 0:
             raise ValueError("top_k must be greater than 0.")
         if not query_embedding:
@@ -78,6 +88,7 @@ class VectorStore:
             results = self._collection.query(
                 query_embeddings=[list(query_embedding)],
                 n_results=min(top_k, stored_count),
+                where={"tenant_id": tenant_id},
                 include=["documents", "metadatas", "distances"],
             )
         except Exception as exc:
@@ -85,25 +96,37 @@ class VectorStore:
 
         return _search_results_to_chunks(results)
 
-    def clear(self) -> None:
-        """Reset the local Chroma collection."""
+    def clear(self, *, tenant_id: str = DEFAULT_TENANT) -> None:
+        """Delete only the given tenant's chunks (other tenants are untouched)."""
         try:
-            self._client.delete_collection(self.collection_name)
+            self._collection.delete(where={"tenant_id": tenant_id})
         except Exception as exc:
-            message = str(exc).lower()
-            if "does not exist" not in message and "not found" not in message:
-                raise VectorStoreError(
-                    "Failed to clear ChromaDB collection."
-                ) from exc
+            raise VectorStoreError("Failed to clear ChromaDB documents.") from exc
 
-        self._collection = self._get_or_create_collection()
-
-    def count(self) -> int:
-        """Return the number of stored chunks."""
+    def count(self, *, tenant_id: str | None = None) -> int:
+        """Count stored chunks (globally, or scoped to a tenant)."""
         try:
-            return int(self._collection.count())
+            if tenant_id is None:
+                return int(self._collection.count())
+            result = self._collection.get(where={"tenant_id": tenant_id}, include=[])
+            return len(result.get("ids") or [])
         except Exception as exc:
             raise VectorStoreError("Failed to count chunks in ChromaDB.") from exc
+
+    def list_documents(
+        self,
+        *,
+        tenant_id: str = DEFAULT_TENANT,
+    ) -> list[DocumentSummary]:
+        """Summarize the tenant's documents, aggregated from chunk metadata."""
+        try:
+            result = self._collection.get(
+                where={"tenant_id": tenant_id},
+                include=["metadatas"],
+            )
+        except Exception as exc:
+            raise VectorStoreError("Failed to list documents in ChromaDB.") from exc
+        return _aggregate_documents(result.get("metadatas") or [])
 
     def _get_or_create_collection(self) -> Any:
         """Return the configured Chroma collection."""
@@ -167,13 +190,25 @@ def _validate_chunks_and_embeddings(
             raise ValueError(f"embeddings[{index}] must not be empty.")
 
 
-def _metadata_from_chunk(chunk: TextChunk) -> dict[str, str | int]:
-    """Build Chroma metadata for a text chunk."""
+def _scoped_id(chunk_id: str, tenant_id: str) -> str:
+    """Namespace a chunk's storage id by tenant, injectively.
+
+    chunk_id is content-addressed, so two tenants uploading the same file would
+    otherwise collide on one Chroma row. The encoding is length-prefixed so the
+    (tenant_id, chunk_id) -> id mapping stays unambiguous even when either part
+    contains the ':' delimiter (e.g. tenant 'a:b'+'c' vs tenant 'a'+'b:c').
+    """
+    return f"{len(tenant_id)}:{tenant_id}:{chunk_id}"
+
+
+def _metadata_from_chunk(chunk: TextChunk, tenant_id: str) -> dict[str, str | int]:
+    """Build Chroma metadata for a text chunk, tagged with its tenant."""
     return {
         "chunk_id": chunk.chunk_id,
         "document_id": chunk.document_id,
         "file_name": chunk.file_name,
         "page_number": chunk.page_number,
+        "tenant_id": tenant_id,
     }
 
 
@@ -210,3 +245,32 @@ def _first_result_list(value: Any) -> list[Any]:
     if not value:
         return []
     return list(value[0])
+
+
+def _aggregate_documents(metadatas: Sequence[dict[str, Any]]) -> list[DocumentSummary]:
+    """Group chunk metadata into per-document summaries, sorted by file name."""
+    docs: dict[str, dict[str, Any]] = {}
+    for metadata in metadatas:
+        document_id = str(metadata.get("document_id", ""))
+        entry = docs.setdefault(
+            document_id,
+            {
+                "file_name": str(metadata.get("file_name", "")),
+                "pages": set(),
+                "chunk_count": 0,
+            },
+        )
+        entry["chunk_count"] += 1
+        entry["pages"].add(int(metadata.get("page_number", 0)))
+
+    return [
+        DocumentSummary(
+            document_id=document_id,
+            file_name=entry["file_name"],
+            page_count=len(entry["pages"]),
+            chunk_count=entry["chunk_count"],
+        )
+        for document_id, entry in sorted(
+            docs.items(), key=lambda item: item[1]["file_name"]
+        )
+    ]

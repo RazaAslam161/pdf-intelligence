@@ -51,3 +51,28 @@ class HealthResponse(BaseModel):
     """Liveness payload for GET /health."""
 
     status: str
+
+
+class ConfigResponse(BaseModel):
+    """Upload limits (P0-2) the client surfaces pre-flight, before sending bytes."""
+
+    max_upload_mb: int
+    max_pages_per_pdf: int
+    max_files_per_run: int
+
+
+class DocumentSummary(BaseModel):
+    """One document currently held in the vector store."""
+
+    document_id: str
+    file_name: str
+    page_count: int
+    chunk_count: int
+
+
+class StoreState(BaseModel):
+    """Live state of the document store for the workspace view."""
+
+    documents: list[DocumentSummary]
+    total_chunks: int
+    ready: bool

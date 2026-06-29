@@ -98,6 +98,18 @@ def test_api_failure_raises_clear_error() -> None:
         service.embed_texts(["hello"])
 
 
+def test_create_openai_client_passes_timeout_and_retries() -> None:
+    """A5: the embedding client is built with a bounded timeout + retry budget."""
+    from unittest.mock import patch
+
+    from src.embeddings import _create_openai_client
+
+    with patch("openai.OpenAI") as mock_openai:
+        _create_openai_client("key", base_url=None, timeout=9.0, max_retries=1)
+
+    mock_openai.assert_called_once_with(api_key="key", timeout=9.0, max_retries=1)
+
+
 def test_embed_texts_rejects_mismatched_api_response_count() -> None:
     """A malformed embedding response should fail instead of losing chunks."""
 

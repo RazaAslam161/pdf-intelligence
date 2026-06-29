@@ -7,25 +7,34 @@ internals beyond the public service. The ``src`` backbone is unchanged.
 
 from __future__ import annotations
 
+import json
 import os
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from src.citations import preview_text
+from src.config import Settings, get_settings
 from src.models import RetrievedChunk
+from src.observability import get_logger
 from src.rag_service import IndexingLimitError, RAGService, RAGServiceError
+from src.vector_store import VectorStore, VectorStoreError
 
-from .deps import get_rag_service
+from .deps import get_rag_service, get_tenant_id, get_vector_store
 from .schemas import (
     AskRequest,
-    AskResponse,
+    ConfigResponse,
+    DocumentSummary,
     HealthResponse,
     IndexFileResult,
     IndexResponse,
     Source,
+    StoreState,
 )
+
+logger = get_logger("api")
 
 DEFAULT_ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
 PREVIEW_CHARS = 220
@@ -80,28 +89,94 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@app.post("/ask", response_model=AskResponse)
+@app.get("/config", response_model=ConfigResponse)
+def config(settings: Settings = Depends(get_settings)) -> ConfigResponse:
+    """Expose upload limits so the client can reject oversized files pre-flight."""
+    return ConfigResponse(
+        max_upload_mb=settings.max_upload_mb,
+        max_pages_per_pdf=settings.max_pages_per_pdf,
+        max_files_per_run=settings.max_files_per_run,
+    )
+
+
+def _store_state(store: VectorStore, tenant_id: str) -> StoreState:
+    """Build the live store state DTO for one tenant."""
+    documents = [
+        DocumentSummary(
+            document_id=doc.document_id,
+            file_name=doc.file_name,
+            page_count=doc.page_count,
+            chunk_count=doc.chunk_count,
+        )
+        for doc in store.list_documents(tenant_id=tenant_id)
+    ]
+    total = store.count(tenant_id=tenant_id)
+    return StoreState(documents=documents, total_chunks=total, ready=total > 0)
+
+
+@app.get("/documents", response_model=StoreState)
+def documents(
+    store: VectorStore = Depends(get_vector_store),
+    tenant_id: str = Depends(get_tenant_id),
+) -> StoreState:
+    """Return the caller's live document store (scoped to their tenant)."""
+    try:
+        return _store_state(store, tenant_id)
+    except VectorStoreError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.delete("/documents", response_model=StoreState)
+def clear_documents(
+    store: VectorStore = Depends(get_vector_store),
+    tenant_id: str = Depends(get_tenant_id),
+) -> StoreState:
+    """Wipe only the caller's documents and return their (now empty) state."""
+    try:
+        store.clear(tenant_id=tenant_id)
+        return _store_state(store, tenant_id)
+    except VectorStoreError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _sse(data: dict[str, object]) -> str:
+    """Format one server-sent event."""
+    return f"data: {json.dumps(data)}\n\n"
+
+
+@app.post("/ask")
 def ask(
     payload: AskRequest,
     service: RAGService = Depends(get_rag_service),
-) -> AskResponse:
-    """Answer a question from indexed PDF context with grounded citations."""
+    tenant_id: str = Depends(get_tenant_id),
+) -> StreamingResponse:
+    """Stream a grounded answer token-by-token (SSE); sources arrive at the end."""
     question = payload.question.strip()
     if not question:
         raise HTTPException(status_code=422, detail="question must not be empty.")
-    try:
-        answer = service.answer_question(question)
-    except RAGServiceError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return AskResponse(answer=answer.answer, sources=to_sources(answer.sources))
+
+    def event_stream() -> Iterator[str]:
+        try:
+            for kind, value in service.stream_answer(question, tenant_id=tenant_id):
+                if kind == "token":
+                    yield _sse({"type": "token", "text": value})
+                elif kind == "sources":
+                    sources = [source.model_dump() for source in to_sources(value)]
+                    yield _sse({"type": "sources", "sources": sources})
+            yield _sse({"type": "done"})
+        except RAGServiceError as exc:
+            yield _sse({"type": "error", "message": str(exc)})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/index", response_model=IndexResponse)
 async def index(
     files: list[UploadFile] = File(...),
     service: RAGService = Depends(get_rag_service),
+    tenant_id: str = Depends(get_tenant_id),
 ) -> IndexResponse:
-    """Index one or more uploaded PDFs; each file succeeds or fails on its own."""
+    """Index uploaded PDFs for the caller's tenant; each file is isolated."""
     results: list[IndexFileResult] = []
     for upload in files:
         file_name = upload.filename or "upload.pdf"
@@ -110,12 +185,17 @@ async def index(
             continue
 
         data = await upload.read()
+        # Per-file isolation (A6): each file gets its own try/except so one bad
+        # file never aborts the batch; successes are already persisted by the
+        # time a later file fails.
         try:
-            result = service.index_pdf(data, file_name)
-        except IndexingLimitError:
+            result = service.index_pdf(data, file_name, tenant_id=tenant_id)
+        except IndexingLimitError as exc:
+            logger.info("index_rejected file=%s reason=%s", file_name, exc)
             results.append(_failed_result(file_name, "rejected"))
             continue
-        except RAGServiceError:
+        except Exception:
+            logger.exception("index_failed file=%s", file_name)
             results.append(_failed_result(file_name, "failed"))
             continue
 

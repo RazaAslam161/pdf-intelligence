@@ -5,6 +5,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol
 
+from src.observability import get_logger
+
+logger = get_logger("embeddings")
+
 DEFAULT_EMBEDDING_BATCH_SIZE = 100
 MISSING_API_KEY_MESSAGE = (
     "OPENAI_API_KEY is missing. Add it to your .env file before creating embeddings."
@@ -17,6 +21,8 @@ class EmbeddingSettings(Protocol):
     openai_api_key: str | None
     openai_base_url: str | None
     openai_embedding_model: str
+    request_timeout: float
+    max_retries: int
 
 
 class EmbeddingServiceError(RuntimeError):
@@ -48,6 +54,8 @@ class EmbeddingService:
         self._client = client or _create_openai_client(
             str(api_key),
             base_url=base_url,
+            timeout=getattr(settings, "request_timeout", None),
+            max_retries=getattr(settings, "max_retries", None),
         )
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
@@ -70,6 +78,7 @@ class EmbeddingService:
             )
             embeddings = _extract_embeddings(response)
         except Exception as exc:
+            logger.exception("embed_failed model=%s n=%d", self._model, len(batch))
             raise EmbeddingServiceError(
                 "Failed to create embeddings with the OpenAI API."
             ) from exc
@@ -79,6 +88,13 @@ class EmbeddingService:
                 "OpenAI returned an unexpected number of embeddings."
             )
 
+        usage = getattr(response, "usage", None)
+        logger.debug(
+            "embed model=%s n=%d total_tokens=%s",
+            self._model,
+            len(batch),
+            getattr(usage, "total_tokens", None),
+        )
         return embeddings
 
 
@@ -100,8 +116,14 @@ def embed_texts(
     return EmbeddingService(_Settings(), client=client).embed_texts(list(texts))
 
 
-def _create_openai_client(api_key: str, *, base_url: str | None = None) -> Any:
-    """Create the OpenAI SDK client only when needed."""
+def _create_openai_client(
+    api_key: str,
+    *,
+    base_url: str | None = None,
+    timeout: float | None = None,
+    max_retries: int | None = None,
+) -> Any:
+    """Create the OpenAI SDK client with a bounded timeout and retry budget."""
     try:
         from openai import OpenAI
     except ImportError as exc:
@@ -110,9 +132,14 @@ def _create_openai_client(api_key: str, *, base_url: str | None = None) -> Any:
             "Run `pip install -r requirements.txt`."
         ) from exc
 
+    kwargs: dict[str, Any] = {"api_key": api_key}
     if base_url:
-        return OpenAI(api_key=api_key, base_url=base_url)
-    return OpenAI(api_key=api_key)
+        kwargs["base_url"] = base_url
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+    if max_retries is not None:
+        kwargs["max_retries"] = max_retries
+    return OpenAI(**kwargs)
 
 
 def _validate_openai_compatible_settings(

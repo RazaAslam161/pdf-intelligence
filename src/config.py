@@ -24,6 +24,12 @@ DEFAULT_MAX_UPLOAD_MB = 25
 DEFAULT_MAX_PAGES_PER_PDF = 500
 DEFAULT_MAX_CHUNKS_PER_RUN = 5000
 DEFAULT_MAX_FILES_PER_RUN = 20
+# OpenAI request controls (A5): bound latency and cost. request_timeout is the
+# per-request deadline (seconds) enforced by the OpenAI SDK; max_retries is the
+# SDK's automatic retry budget; max_output_tokens caps each answer's length.
+DEFAULT_REQUEST_TIMEOUT = 30.0
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_MAX_OUTPUT_TOKENS = 1024
 MISSING_API_KEY_MESSAGE = (
     "OPENAI_API_KEY is missing. Add it to your .env file before using OpenAI features."
 )
@@ -46,6 +52,9 @@ class Settings:
     max_pages_per_pdf: int = DEFAULT_MAX_PAGES_PER_PDF
     max_chunks_per_run: int = DEFAULT_MAX_CHUNKS_PER_RUN
     max_files_per_run: int = DEFAULT_MAX_FILES_PER_RUN
+    request_timeout: float = DEFAULT_REQUEST_TIMEOUT
+    max_retries: int = DEFAULT_MAX_RETRIES
+    max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
     validation_error: str | None = None
 
     @property
@@ -91,6 +100,12 @@ def get_settings() -> Settings:
         max_files_per_run=_get_int_env(
             "MAX_FILES_PER_RUN",
             DEFAULT_MAX_FILES_PER_RUN,
+        ),
+        request_timeout=_get_float_env("REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT),
+        max_retries=_get_int_env("MAX_RETRIES", DEFAULT_MAX_RETRIES),
+        max_output_tokens=_get_int_env(
+            "MAX_OUTPUT_TOKENS",
+            DEFAULT_MAX_OUTPUT_TOKENS,
         ),
         validation_error=validation_error,
     )

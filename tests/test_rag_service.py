@@ -1,5 +1,6 @@
 """Tests for the high-level RAG service."""
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -10,6 +11,7 @@ from src.rag_service import (
     IndexingLimitError,
     RAGService,
     RAGServiceError,
+    _create_openai_client,
     build_grounded_prompt,
     filter_relevant_chunks,
     validate_chunk_count,
@@ -38,6 +40,9 @@ class FakeSettings:
     max_pages_per_pdf = 0
     max_chunks_per_run = 0
     max_files_per_run = 0
+    request_timeout = 30.0
+    max_retries = 2
+    max_output_tokens = 256
 
 
 class FakeEmbeddingService:
@@ -64,11 +69,19 @@ class FakeVectorStore:
         self,
         chunks: list[TextChunk],
         embeddings: list[list[float]],
+        *,
+        tenant_id: str = "default",
     ) -> None:
         self.added_chunks = chunks
         self.added_embeddings = embeddings
 
-    def search(self, query_embedding: list[float], top_k: int) -> list[RetrievedChunk]:
+    def search(
+        self,
+        query_embedding: list[float],
+        top_k: int,
+        *,
+        tenant_id: str = "default",
+    ) -> list[RetrievedChunk]:
         self.search_calls.append((query_embedding, top_k))
         return self.search_results
 
@@ -79,14 +92,25 @@ class FakeCompletionsEndpoint:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    def create(self, *, model: str, messages: list[dict[str, str]]) -> SimpleNamespace:
-        self.calls.append({"model": model, "messages": messages})
+    def create(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, str]],
+        max_tokens: int | None = None,
+    ) -> SimpleNamespace:
+        self.calls.append(
+            {"model": model, "messages": messages, "max_tokens": max_tokens}
+        )
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(
                     message=SimpleNamespace(content="The answer is in the PDF.")
                 )
-            ]
+            ],
+            usage=SimpleNamespace(
+                prompt_tokens=11, completion_tokens=7, total_tokens=18
+            ),
         )
 
 
@@ -161,6 +185,7 @@ def test_answer_question_retrieves_context_and_calls_openai() -> None:
     assert embeddings.calls == [["What is the refund window?"]]
     assert vector_store.search_calls == [([1.0, 0.0], 2)]
     assert openai_client.chat.completions.calls[0]["model"] == "test-chat-model"
+    assert openai_client.chat.completions.calls[0]["max_tokens"] == 256
     user_message = openai_client.chat.completions.calls[0]["messages"][1]["content"]
     assert "The refund window is 30 days." in user_message
 
@@ -244,7 +269,13 @@ def test_answer_question_wraps_generation_failures() -> None:
     """Generation failures should be readable for Streamlit."""
 
     class FailingCompletionsEndpoint:
-        def create(self, *, model: str, messages: list[dict[str, str]]) -> None:
+        def create(
+            self,
+            *,
+            model: str,
+            messages: list[dict[str, str]],
+            max_tokens: int | None = None,
+        ) -> None:
             raise RuntimeError("upstream failed")
 
     class FailingChatNamespace:
@@ -379,6 +410,110 @@ def test_validate_page_and_chunk_counts_enforce_caps() -> None:
         validate_chunk_count(4, "f.pdf", settings)
 
 
+def test_answer_question_logs_correlated_line(caplog) -> None:
+    """A7: a successful answer emits one correlated line with timings + tokens."""
+    retrieved = [
+        RetrievedChunk(
+            chunk=TextChunk(
+                chunk_id="chunk-1",
+                document_id="doc-1",
+                file_name="s.pdf",
+                page_number=1,
+                text="Body.",
+            ),
+            score=0.1,
+        )
+    ]
+    service = RAGService(
+        FakeSettings(),
+        embedding_service=FakeEmbeddingService(),
+        vector_store=FakeVectorStore(search_results=retrieved),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    with caplog.at_level(logging.INFO, logger="ragpdf"):
+        service.answer_question("What?")
+
+    text = caplog.text
+    assert "answer request_id=" in text
+    assert "embed_ms=" in text
+    assert "search_ms=" in text
+    assert "llm_ms=" in text
+    assert "total_tokens=18" in text
+    assert "sources=1" in text
+
+
+def test_index_pdf_logs_outcome(caplog) -> None:
+    """A7: indexing emits a per-document outcome line."""
+    service = RAGService(
+        FakeSettings(),
+        embedding_service=FakeEmbeddingService(),
+        vector_store=FakeVectorStore(),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    with caplog.at_level(logging.INFO, logger="ragpdf"):
+        service.index_pdf(_simple_pdf_bytes(), "sample.pdf")
+
+    text = caplog.text
+    assert "index request_id=" in text
+    assert "file=sample.pdf" in text
+    assert "pages=1" in text
+    assert "chunks=1" in text
+
+
+def test_create_openai_client_passes_timeout_and_retries() -> None:
+    """A5: the per-request deadline + retry budget are configured on the client."""
+    from unittest.mock import patch
+
+    with patch("openai.OpenAI") as mock_openai:
+        _create_openai_client(
+            "key",
+            base_url="https://example.test/v1",
+            timeout=12.5,
+            max_retries=4,
+        )
+
+    mock_openai.assert_called_once_with(
+        api_key="key",
+        base_url="https://example.test/v1",
+        timeout=12.5,
+        max_retries=4,
+    )
+
+
+def test_generation_aborts_when_openai_call_times_out() -> None:
+    """A5: a timed-out call (deadline reached) aborts with a clean error, no hang."""
+
+    class TimingOutCompletions:
+        def create(
+            self,
+            *,
+            model: str,
+            messages: list[dict[str, str]],
+            max_tokens: int | None = None,
+        ) -> None:
+            raise TimeoutError("Request timed out.")
+
+    class TimingOutChat:
+        completions = TimingOutCompletions()
+
+    class TimingOutClient:
+        chat = TimingOutChat()
+
+    service = RAGService(
+        FakeSettings(),
+        embedding_service=FakeEmbeddingService(),
+        vector_store=FakeVectorStore(
+            search_results=[RetrievedChunk(chunk=_text_chunk("a"))]
+        ),
+        openai_client=TimingOutClient(),
+    )
+
+    with pytest.raises(RAGServiceError, match="Failed to generate an answer"):
+        service.answer_question("Question?")
+
+
 def test_index_pdf_rejects_oversized_upload_before_parsing() -> None:
     """The size cap fires before pypdf/embedding, so junk bytes never get parsed."""
     settings = FakeSettings()
@@ -395,6 +530,61 @@ def test_index_pdf_rejects_oversized_upload_before_parsing() -> None:
     with pytest.raises(IndexingLimitError, match="upload limit"):
         service.index_pdf(oversized, "big.pdf")
     assert embeddings.calls == []
+
+
+class FakeStreamingClient:
+    """Fake OpenAI client that streams content deltas for stream_answer tests."""
+
+    def __init__(self, deltas: list[str]) -> None:
+        self._deltas = deltas
+        self.chat = SimpleNamespace(completions=self)
+
+    def create(
+        self,
+        *,
+        model: str,
+        messages: list[dict[str, str]],
+        stream: bool = False,
+        max_tokens: int | None = None,
+    ):
+        return iter(
+            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=d))])
+            for d in self._deltas
+        )
+
+
+def test_stream_answer_yields_tokens_then_sources() -> None:
+    """stream_answer emits token events, then one sources event."""
+    retrieved = [RetrievedChunk(chunk=_text_chunk("a"), score=0.1)]
+    service = RAGService(
+        FakeSettings(),
+        embedding_service=FakeEmbeddingService(),
+        vector_store=FakeVectorStore(search_results=retrieved),
+        openai_client=FakeStreamingClient(["The ", "answer ", "is here [1]."]),
+    )
+
+    events = list(service.stream_answer("What?"))
+
+    assert [kind for kind, _ in events] == ["token", "token", "token", "sources"]
+    text = "".join(value for kind, value in events if kind == "token")
+    assert text == "The answer is here [1]."
+    sources = [value for kind, value in events if kind == "sources"][0]
+    assert len(sources) == 1
+    assert sources[0].chunk.chunk_id == "chunk-a"
+
+
+def test_stream_answer_no_context_yields_fallback() -> None:
+    """With nothing relevant, stream_answer yields the no-context fallback."""
+    service = RAGService(
+        FakeSettings(),
+        embedding_service=FakeEmbeddingService(),
+        vector_store=FakeVectorStore(search_results=[]),
+        openai_client=FakeStreamingClient([]),
+    )
+
+    events = list(service.stream_answer("?"))
+
+    assert events == [("token", NO_CONTEXT_ANSWER), ("sources", [])]
 
 
 def _text_chunk(suffix: str) -> TextChunk:

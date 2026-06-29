@@ -22,6 +22,9 @@ CONFIG_ENV_KEYS = {
     "MAX_PAGES_PER_PDF",
     "MAX_CHUNKS_PER_RUN",
     "MAX_FILES_PER_RUN",
+    "REQUEST_TIMEOUT",
+    "MAX_RETRIES",
+    "MAX_OUTPUT_TOKENS",
 }
 
 
@@ -53,6 +56,9 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.max_pages_per_pdf, 500)
         self.assertEqual(settings.max_chunks_per_run, 5000)
         self.assertEqual(settings.max_files_per_run, 20)
+        self.assertEqual(settings.request_timeout, 30.0)
+        self.assertEqual(settings.max_retries, 2)
+        self.assertEqual(settings.max_output_tokens, 1024)
         self.assertIsNone(settings.validation_error)
         self.assertTrue(settings.has_openai_api_key)
 
@@ -72,6 +78,9 @@ class SettingsTests(unittest.TestCase):
             "MAX_PAGES_PER_PDF": "100",
             "MAX_CHUNKS_PER_RUN": "1000",
             "MAX_FILES_PER_RUN": "5",
+            "REQUEST_TIMEOUT": "15",
+            "MAX_RETRIES": "5",
+            "MAX_OUTPUT_TOKENS": "2048",
         }
 
         with patch("src.config.load_dotenv"), patch.dict(os.environ, env, clear=True):
@@ -89,6 +98,9 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.max_pages_per_pdf, 100)
         self.assertEqual(settings.max_chunks_per_run, 1000)
         self.assertEqual(settings.max_files_per_run, 5)
+        self.assertEqual(settings.request_timeout, 15.0)
+        self.assertEqual(settings.max_retries, 5)
+        self.assertEqual(settings.max_output_tokens, 2048)
 
     def test_missing_api_key_sets_validation_error(self) -> None:
         """A missing API key should be exposed as a user-facing message."""

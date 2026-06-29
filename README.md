@@ -127,6 +127,10 @@ make install
 | `MAX_PAGES_PER_PDF` | No | Maximum pages indexed per PDF. Defaults to `500`. `0` disables. |
 | `MAX_CHUNKS_PER_RUN` | No | Maximum chunks embedded per document before rejection (cost guard). Defaults to `5000`. `0` disables. |
 | `MAX_FILES_PER_RUN` | No | Maximum files indexed in one run. Defaults to `20`. `0` disables. |
+| `REQUEST_TIMEOUT` | No | Per-request OpenAI deadline in seconds (SDK-enforced). Defaults to `30`. |
+| `MAX_RETRIES` | No | OpenAI client automatic retry budget. Defaults to `2`. |
+| `MAX_OUTPUT_TOKENS` | No | Max tokens per generated answer. Defaults to `1024`. |
+| `LOG_LEVEL` | No | Application log level (`DEBUG`/`INFO`/`WARNING`/`ERROR`). Defaults to `INFO`. |
 
 Use `.env.example` as the reference for variable names and defaults. Keep secrets in `.env` locally or in your hosting provider's secret manager.
 
