@@ -5,11 +5,25 @@ from types import SimpleNamespace
 import pytest
 
 from src.models import RetrievedChunk, TextChunk
-from src.rag_service import RAGService, RAGServiceError, build_grounded_prompt
+from src.rag_service import (
+    NO_CONTEXT_ANSWER,
+    IndexingLimitError,
+    RAGService,
+    RAGServiceError,
+    build_grounded_prompt,
+    filter_relevant_chunks,
+    validate_chunk_count,
+    validate_page_count,
+    validate_pdf_size,
+)
 
 
 class FakeSettings:
-    """Minimal settings for RAG service tests."""
+    """Minimal settings for RAG service tests.
+
+    Indexing limits and the relevance threshold default to 0 (disabled) so the
+    existing orchestration tests are unaffected; per-test overrides exercise them.
+    """
 
     openai_api_key = None
     openai_base_url = None
@@ -19,6 +33,11 @@ class FakeSettings:
     chunk_size = 100
     chunk_overlap = 20
     retrieval_top_k = 2
+    retrieval_max_distance = 0.0
+    max_upload_mb = 0
+    max_pages_per_pdf = 0
+    max_chunks_per_run = 0
+    max_files_per_run = 0
 
 
 class FakeEmbeddingService:
@@ -252,6 +271,138 @@ def test_answer_question_wraps_generation_failures() -> None:
 
     with pytest.raises(RAGServiceError, match="Failed to generate an answer"):
         service.answer_question("Question?")
+
+
+def test_answer_question_drops_chunks_beyond_relevance_threshold() -> None:
+    """Off-topic hits past the distance cutoff yield the grounded no-context answer."""
+    retrieved = [
+        RetrievedChunk(
+            chunk=TextChunk(
+                chunk_id="chunk-1",
+                document_id="doc-1",
+                file_name="source.pdf",
+                page_number=1,
+                text="Unrelated content.",
+            ),
+            score=0.95,
+        )
+    ]
+    settings = FakeSettings()
+    settings.retrieval_max_distance = 0.5
+    service = RAGService(
+        settings,
+        embedding_service=FakeEmbeddingService(),
+        vector_store=FakeVectorStore(search_results=retrieved),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    result = service.answer_question("Something off topic?")
+
+    assert result == {"answer": NO_CONTEXT_ANSWER, "sources": []}
+
+
+def test_answer_question_keeps_chunks_within_threshold() -> None:
+    """A close-enough hit is kept, answered, and cited."""
+    retrieved = [
+        RetrievedChunk(
+            chunk=TextChunk(
+                chunk_id="chunk-1",
+                document_id="doc-1",
+                file_name="source.pdf",
+                page_number=3,
+                text="The refund window is 30 days.",
+            ),
+            score=0.2,
+        )
+    ]
+    settings = FakeSettings()
+    settings.retrieval_max_distance = 0.5
+    service = RAGService(
+        settings,
+        embedding_service=FakeEmbeddingService(),
+        vector_store=FakeVectorStore(search_results=retrieved),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    result = service.answer_question("What is the refund window?")
+
+    assert result["answer"] == "The answer is in the PDF."
+    assert len(result["sources"]) == 1
+
+
+def test_filter_relevant_chunks_keeps_within_threshold_and_unscored() -> None:
+    """Chunks within the cutoff (or lacking a score) survive; distant ones drop."""
+    chunks = [
+        RetrievedChunk(chunk=_text_chunk("a"), score=0.2),
+        RetrievedChunk(chunk=_text_chunk("b"), score=0.9),
+        RetrievedChunk(chunk=_text_chunk("c"), score=None),
+    ]
+
+    kept = filter_relevant_chunks(chunks, 0.5)
+
+    assert [retrieved.score for retrieved in kept] == [0.2, None]
+
+
+def test_filter_relevant_chunks_disabled_returns_all() -> None:
+    """A threshold of 0 disables filtering."""
+    chunks = [
+        RetrievedChunk(chunk=_text_chunk("a"), score=0.2),
+        RetrievedChunk(chunk=_text_chunk("b"), score=1.5),
+    ]
+
+    assert filter_relevant_chunks(chunks, 0) == chunks
+
+
+def test_validate_pdf_size_enforces_and_disables_cap() -> None:
+    """Oversized uploads raise; a 0 cap disables the check."""
+    settings = SimpleNamespace(max_upload_mb=1)
+
+    validate_pdf_size(500_000, "ok.pdf", settings)
+    with pytest.raises(IndexingLimitError, match="upload limit"):
+        validate_pdf_size(2 * 1024 * 1024, "big.pdf", settings)
+    validate_pdf_size(10**9, "huge.pdf", SimpleNamespace(max_upload_mb=0))
+
+
+def test_validate_page_and_chunk_counts_enforce_caps() -> None:
+    """Page and chunk caps raise only above the limit; equal is allowed."""
+    settings = SimpleNamespace(max_pages_per_pdf=2, max_chunks_per_run=3)
+
+    validate_page_count(2, "f.pdf", settings)
+    with pytest.raises(IndexingLimitError, match="page limit"):
+        validate_page_count(3, "f.pdf", settings)
+
+    validate_chunk_count(3, "f.pdf", settings)
+    with pytest.raises(IndexingLimitError, match="chunk limit"):
+        validate_chunk_count(4, "f.pdf", settings)
+
+
+def test_index_pdf_rejects_oversized_upload_before_parsing() -> None:
+    """The size cap fires before pypdf/embedding, so junk bytes never get parsed."""
+    settings = FakeSettings()
+    settings.max_upload_mb = 1
+    embeddings = FakeEmbeddingService()
+    service = RAGService(
+        settings,
+        embedding_service=embeddings,
+        vector_store=FakeVectorStore(),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    oversized = b"%PDF-" + b"0" * (2 * 1024 * 1024)
+    with pytest.raises(IndexingLimitError, match="upload limit"):
+        service.index_pdf(oversized, "big.pdf")
+    assert embeddings.calls == []
+
+
+def _text_chunk(suffix: str) -> TextChunk:
+    """Build a minimal TextChunk fixture for filter tests."""
+    return TextChunk(
+        chunk_id=f"chunk-{suffix}",
+        document_id="doc-1",
+        file_name="source.pdf",
+        page_number=1,
+        text=f"Context {suffix}.",
+    )
 
 
 def _simple_pdf_bytes() -> bytes:

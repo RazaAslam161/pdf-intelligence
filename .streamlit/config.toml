@@ -1,0 +1,12 @@
+# Production-oriented Streamlit configuration.
+# maxUploadSize is the framework-level guard for P0-2 (cost/DoS); it must stay
+# >= MAX_UPLOAD_MB in .env so the app-level per-file check is the binding limit.
+
+[server]
+maxUploadSize = 25
+headless = true
+enableXsrfProtection = true
+enableCORS = true
+
+[browser]
+gatherUsageStats = false

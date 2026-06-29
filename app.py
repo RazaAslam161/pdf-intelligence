@@ -10,7 +10,12 @@ from typing import Any, Protocol
 import streamlit as st
 
 from src.config import DEFAULT_OPENAI_CHAT_MODEL, Settings, get_settings
-from src.rag_service import NO_CONTEXT_ANSWER, RAGService, RAGServiceError
+from src.rag_service import (
+    NO_CONTEXT_ANSWER,
+    IndexingLimitError,
+    RAGService,
+    RAGServiceError,
+)
 from src.vector_store import VectorStore, VectorStoreError
 
 DEBUG_MODE = os.getenv("APP_DEBUG", "").lower() in {"1", "true", "yes"}
@@ -26,6 +31,8 @@ class SettingsLike(Protocol):
     chunk_size: int
     chunk_overlap: int
     retrieval_top_k: int
+    max_upload_mb: int
+    max_files_per_run: int
 
 
 def main() -> None:
@@ -134,10 +141,12 @@ def build_indexing_feedback(summaries: list[dict[str, Any]]) -> dict[str, str]:
             ),
         }
 
+    skip_statuses = {"unsupported", "too_large", "rejected"}
     zero_chunk_files = [
         str(summary.get("file_name", "a PDF"))
         for summary in summaries
-        if int(summary.get("chunk_count", 0)) == 0
+        if summary.get("status") not in skip_statuses
+        and int(summary.get("chunk_count", 0)) == 0
     ]
     if zero_chunk_files:
         return {
@@ -548,34 +557,65 @@ def _answer_chat_question(settings: Settings, raw_question: str) -> None:
         render_sources(sources)
 
 
+def _rejected_summary(file_name: str, status: str) -> dict[str, Any]:
+    """Build a zero-chunk summary entry for a skipped or rejected file."""
+    return {
+        "file_name": file_name,
+        "page_count": 0,
+        "chunk_count": 0,
+        "status": status,
+    }
+
+
 def _index_uploaded_files(settings: Settings, uploaded_files: list[Any]) -> None:
     """Index uploaded PDFs and render progress."""
     if not can_index_documents(settings, len(uploaded_files)):
         st.warning("Add PDFs and configure `OPENAI_API_KEY` before indexing.")
         return
 
+    files_to_index = list(uploaded_files)
+    if (
+        settings.max_files_per_run > 0
+        and len(files_to_index) > settings.max_files_per_run
+    ):
+        st.warning(
+            f"You added {len(files_to_index)} files; indexing the first "
+            f"{settings.max_files_per_run} (the per-run limit)."
+        )
+        files_to_index = files_to_index[: settings.max_files_per_run]
+
     progress_bar = st.progress(0, text="Preparing documents...")
     status = st.empty()
     summaries: list[dict[str, Any]] = []
+    max_bytes = settings.max_upload_mb * 1024 * 1024
 
     try:
         rag_service = RAGService(settings)
-        total_files = len(uploaded_files)
-        for index, uploaded_file in enumerate(uploaded_files, start=1):
+        total_files = len(files_to_index)
+        for index, uploaded_file in enumerate(files_to_index, start=1):
             file_name = str(uploaded_file.name)
             if not is_supported_pdf_file(file_name):
-                summaries.append(
-                    {
-                        "file_name": file_name,
-                        "page_count": 0,
-                        "chunk_count": 0,
-                        "status": "unsupported",
-                    }
+                summaries.append(_rejected_summary(file_name, "unsupported"))
+                continue
+
+            size_bytes = getattr(uploaded_file, "size", None)
+            if size_bytes is None:
+                size_bytes = len(uploaded_file.getvalue())
+            if settings.max_upload_mb > 0 and size_bytes > max_bytes:
+                summaries.append(_rejected_summary(file_name, "too_large"))
+                st.warning(
+                    f"{file_name} is over the {settings.max_upload_mb} MB upload "
+                    "limit and was skipped."
                 )
                 continue
 
             status.info(f"Indexing {file_name}")
-            summary = rag_service.index_pdf(uploaded_file.getvalue(), file_name)
+            try:
+                summary = rag_service.index_pdf(uploaded_file.getvalue(), file_name)
+            except IndexingLimitError as exc:
+                summaries.append(_rejected_summary(file_name, "rejected"))
+                st.warning(str(exc))
+                continue
             summary["status"] = "indexed"
             summaries.append(summary)
             progress_bar.progress(
@@ -635,6 +675,10 @@ def _render_indexed_document_card(summary: dict[str, Any]) -> None:
     status_label = "Indexed" if chunks > 0 else "Needs review"
     if status == "unsupported":
         status_label = "Unsupported"
+    elif status == "too_large":
+        status_label = "Too large"
+    elif status == "rejected":
+        status_label = "Rejected"
 
     st.markdown(
         f"""
@@ -652,7 +696,9 @@ def _render_indexed_document_card(summary: dict[str, Any]) -> None:
         """,
         unsafe_allow_html=True,
     )
-    if pages == 0 or chunks == 0:
+    if status not in {"unsupported", "too_large", "rejected"} and (
+        pages == 0 or chunks == 0
+    ):
         st.warning("This PDF may be scanned or image-based.")
 
 

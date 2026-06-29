@@ -31,6 +31,11 @@ class FakeSettings:
     chunk_size: int = 1000
     chunk_overlap: int = 150
     retrieval_top_k: int = 4
+    retrieval_max_distance: float = 0.75
+    max_upload_mb: int = 25
+    max_pages_per_pdf: int = 500
+    max_chunks_per_run: int = 5000
+    max_files_per_run: int = 20
 
 
 def test_build_sidebar_status_excludes_raw_config_and_api_key() -> None:

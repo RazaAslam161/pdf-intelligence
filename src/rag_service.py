@@ -32,6 +32,10 @@ class RAGSettings(Protocol):
     chunk_size: int
     chunk_overlap: int
     retrieval_top_k: int
+    retrieval_max_distance: float
+    max_upload_mb: int
+    max_pages_per_pdf: int
+    max_chunks_per_run: int
 
 
 class EmbeddingServiceLike(Protocol):
@@ -59,6 +63,10 @@ class RAGServiceError(RuntimeError):
     """Raised when indexing or answering fails."""
 
 
+class IndexingLimitError(ValueError):
+    """Raised when an upload exceeds a configured indexing limit (P0-2)."""
+
+
 class RAGService:
     """Main service for indexing PDFs and answering grounded questions."""
 
@@ -78,17 +86,24 @@ class RAGService:
 
     def index_pdf(self, pdf_bytes: bytes, file_name: str) -> dict[str, int | str]:
         """Extract, chunk, embed, and store one uploaded PDF."""
+        # Enforce the size cap before parsing so an oversized upload never
+        # reaches pypdf or the paid embedding API.
+        validate_pdf_size(len(pdf_bytes), file_name, self.settings)
         try:
             pages = load_pdf_pages(pdf_bytes, file_name)
+            validate_page_count(len(pages), file_name, self.settings)
             chunks = chunk_pages(
                 pages,
                 chunk_size=self.settings.chunk_size,
                 chunk_overlap=self.settings.chunk_overlap,
             )
+            validate_chunk_count(len(chunks), file_name, self.settings)
             embeddings = self.embedding_service.embed_texts(
                 [chunk.text for chunk in chunks]
             )
             self.vector_store.add_chunks(chunks, embeddings)
+        except IndexingLimitError:
+            raise
         except Exception as exc:
             raise RAGServiceError(f"Failed to index PDF '{file_name}'.") from exc
 
@@ -118,15 +133,23 @@ class RAGService:
         except Exception as exc:
             raise RAGServiceError("Failed to retrieve relevant PDF context.") from exc
 
-        if not retrieved_chunks:
+        # Retrieval honesty (P0-1): Chroma always returns the top_k nearest
+        # neighbors, however distant. Drop chunks past the relevance threshold so
+        # an off-topic question yields the grounded no-context answer with no
+        # citations, instead of confidently citing irrelevant passages.
+        relevant_chunks = filter_relevant_chunks(
+            retrieved_chunks,
+            self.settings.retrieval_max_distance,
+        )
+        if not relevant_chunks:
             return {"answer": NO_CONTEXT_ANSWER, "sources": []}
 
-        prompt = build_grounded_prompt(clean_question, retrieved_chunks)
+        prompt = build_grounded_prompt(clean_question, relevant_chunks)
         answer = self._generate_answer(prompt)
 
         return {
             "answer": answer,
-            "sources": build_sources(retrieved_chunks),
+            "sources": build_sources(relevant_chunks),
         }
 
     def _generate_answer(self, prompt: str) -> str:
@@ -191,6 +214,57 @@ def build_sources(
 ) -> list[dict[str, int | str]]:
     """Build simple citation dictionaries for UI display."""
     return build_source_citations(retrieved_chunks, preview_chars=preview_chars)
+
+
+def filter_relevant_chunks(
+    retrieved_chunks: Sequence[RetrievedChunk],
+    max_distance: float,
+) -> list[RetrievedChunk]:
+    """Keep only chunks within the cosine-distance relevance threshold (P0-1).
+
+    Chunks without a score are kept (their relevance cannot be disproven). A
+    ``max_distance`` of 0 or less disables filtering.
+    """
+    if max_distance <= 0:
+        return list(retrieved_chunks)
+    return [
+        retrieved
+        for retrieved in retrieved_chunks
+        if retrieved.score is None or retrieved.score <= max_distance
+    ]
+
+
+def validate_pdf_size(num_bytes: int, file_name: str, settings: RAGSettings) -> None:
+    """Reject an upload larger than the configured size cap (P0-2)."""
+    max_mb = settings.max_upload_mb
+    if max_mb > 0 and num_bytes > max_mb * 1024 * 1024:
+        size_mb = num_bytes / (1024 * 1024)
+        raise IndexingLimitError(
+            f"'{file_name}' is {size_mb:.1f} MB, over the {max_mb} MB upload limit."
+        )
+
+
+def validate_page_count(page_count: int, file_name: str, settings: RAGSettings) -> None:
+    """Reject a document with more pages than the configured cap (P0-2)."""
+    max_pages = settings.max_pages_per_pdf
+    if max_pages > 0 and page_count > max_pages:
+        raise IndexingLimitError(
+            f"'{file_name}' has {page_count} pages, over the {max_pages}-page limit."
+        )
+
+
+def validate_chunk_count(
+    chunk_count: int,
+    file_name: str,
+    settings: RAGSettings,
+) -> None:
+    """Reject a document producing more chunks than the cap before embedding (P0-2)."""
+    max_chunks = settings.max_chunks_per_run
+    if max_chunks > 0 and chunk_count > max_chunks:
+        raise IndexingLimitError(
+            f"'{file_name}' produced {chunk_count} chunks, over the "
+            f"{max_chunks}-chunk limit."
+        )
 
 
 def _create_openai_client(api_key: str | None, *, base_url: str | None = None) -> Any:

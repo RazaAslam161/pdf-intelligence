@@ -122,6 +122,11 @@ make install
 | `CHUNK_SIZE` | No | Maximum chunk size used during text splitting. Defaults to `1000`. |
 | `CHUNK_OVERLAP` | No | Character overlap between adjacent chunks. Defaults to `150`. |
 | `RETRIEVAL_TOP_K` | No | Number of chunks retrieved for each question. Defaults to `4`. |
+| `RETRIEVAL_MAX_DISTANCE` | No | Max cosine distance for a retrieved chunk to count as relevant; chunks beyond it are dropped so off-topic questions return "no answer found" instead of citing irrelevant text. Defaults to `0.75`. `0` disables filtering. |
+| `MAX_UPLOAD_MB` | No | Maximum size per uploaded PDF. Defaults to `25`. Keep in sync with `server.maxUploadSize` in `.streamlit/config.toml`. `0` disables. |
+| `MAX_PAGES_PER_PDF` | No | Maximum pages indexed per PDF. Defaults to `500`. `0` disables. |
+| `MAX_CHUNKS_PER_RUN` | No | Maximum chunks embedded per document before rejection (cost guard). Defaults to `5000`. `0` disables. |
+| `MAX_FILES_PER_RUN` | No | Maximum files indexed in one run. Defaults to `20`. `0` disables. |
 
 Use `.env.example` as the reference for variable names and defaults. Keep secrets in `.env` locally or in your hosting provider's secret manager.
 

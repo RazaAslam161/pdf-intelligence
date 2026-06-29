@@ -1,3 +1,5 @@
+"""Runtime configuration loaded from environment variables."""
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +13,17 @@ DEFAULT_CHROMA_PERSIST_DIR = "./chroma_db"
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_CHUNK_OVERLAP = 150
 DEFAULT_RETRIEVAL_TOP_K = 4
+# Retrieval honesty (P0-1): keep only chunks within this cosine distance of the
+# query. Chroma cosine distance is 1 - cosine_similarity (range 0..2); lower is
+# closer. Chunks above the threshold are treated as "not found" so off-topic
+# questions return the grounded no-context answer instead of confident citations.
+DEFAULT_RETRIEVAL_MAX_DISTANCE = 0.75
+# Indexing limits (P0-2): guard against cost blow-up / memory DoS from oversized
+# uploads. A value <= 0 disables that individual limit.
+DEFAULT_MAX_UPLOAD_MB = 25
+DEFAULT_MAX_PAGES_PER_PDF = 500
+DEFAULT_MAX_CHUNKS_PER_RUN = 5000
+DEFAULT_MAX_FILES_PER_RUN = 20
 MISSING_API_KEY_MESSAGE = (
     "OPENAI_API_KEY is missing. Add it to your .env file before using OpenAI features."
 )
@@ -28,6 +41,11 @@ class Settings:
     chunk_size: int = 1000
     chunk_overlap: int = 150
     retrieval_top_k: int = 4
+    retrieval_max_distance: float = DEFAULT_RETRIEVAL_MAX_DISTANCE
+    max_upload_mb: int = DEFAULT_MAX_UPLOAD_MB
+    max_pages_per_pdf: int = DEFAULT_MAX_PAGES_PER_PDF
+    max_chunks_per_run: int = DEFAULT_MAX_CHUNKS_PER_RUN
+    max_files_per_run: int = DEFAULT_MAX_FILES_PER_RUN
     validation_error: str | None = None
 
     @property
@@ -60,6 +78,20 @@ def get_settings() -> Settings:
         chunk_size=_get_int_env("CHUNK_SIZE", DEFAULT_CHUNK_SIZE),
         chunk_overlap=_get_int_env("CHUNK_OVERLAP", DEFAULT_CHUNK_OVERLAP),
         retrieval_top_k=_get_int_env("RETRIEVAL_TOP_K", DEFAULT_RETRIEVAL_TOP_K),
+        retrieval_max_distance=_get_float_env(
+            "RETRIEVAL_MAX_DISTANCE",
+            DEFAULT_RETRIEVAL_MAX_DISTANCE,
+        ),
+        max_upload_mb=_get_int_env("MAX_UPLOAD_MB", DEFAULT_MAX_UPLOAD_MB),
+        max_pages_per_pdf=_get_int_env("MAX_PAGES_PER_PDF", DEFAULT_MAX_PAGES_PER_PDF),
+        max_chunks_per_run=_get_int_env(
+            "MAX_CHUNKS_PER_RUN",
+            DEFAULT_MAX_CHUNKS_PER_RUN,
+        ),
+        max_files_per_run=_get_int_env(
+            "MAX_FILES_PER_RUN",
+            DEFAULT_MAX_FILES_PER_RUN,
+        ),
         validation_error=validation_error,
     )
 
@@ -93,6 +125,18 @@ def _get_int_env(name: str, default: int) -> int:
 
     try:
         return int(value)
+    except ValueError:
+        return default
+
+
+def _get_float_env(name: str, default: float) -> float:
+    """Return a float environment variable or a safe default."""
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+
+    try:
+        return float(value)
     except ValueError:
         return default
 

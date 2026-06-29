@@ -17,6 +17,11 @@ CONFIG_ENV_KEYS = {
     "CHUNK_SIZE",
     "CHUNK_OVERLAP",
     "RETRIEVAL_TOP_K",
+    "RETRIEVAL_MAX_DISTANCE",
+    "MAX_UPLOAD_MB",
+    "MAX_PAGES_PER_PDF",
+    "MAX_CHUNKS_PER_RUN",
+    "MAX_FILES_PER_RUN",
 }
 
 
@@ -43,6 +48,11 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.chunk_size, 1000)
         self.assertEqual(settings.chunk_overlap, 150)
         self.assertEqual(settings.retrieval_top_k, 4)
+        self.assertEqual(settings.retrieval_max_distance, 0.75)
+        self.assertEqual(settings.max_upload_mb, 25)
+        self.assertEqual(settings.max_pages_per_pdf, 500)
+        self.assertEqual(settings.max_chunks_per_run, 5000)
+        self.assertEqual(settings.max_files_per_run, 20)
         self.assertIsNone(settings.validation_error)
         self.assertTrue(settings.has_openai_api_key)
 
@@ -57,6 +67,11 @@ class SettingsTests(unittest.TestCase):
             "CHUNK_SIZE": "1200",
             "CHUNK_OVERLAP": "180",
             "RETRIEVAL_TOP_K": "6",
+            "RETRIEVAL_MAX_DISTANCE": "0.4",
+            "MAX_UPLOAD_MB": "50",
+            "MAX_PAGES_PER_PDF": "100",
+            "MAX_CHUNKS_PER_RUN": "1000",
+            "MAX_FILES_PER_RUN": "5",
         }
 
         with patch("src.config.load_dotenv"), patch.dict(os.environ, env, clear=True):
@@ -69,6 +84,11 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.chunk_size, 1200)
         self.assertEqual(settings.chunk_overlap, 180)
         self.assertEqual(settings.retrieval_top_k, 6)
+        self.assertEqual(settings.retrieval_max_distance, 0.4)
+        self.assertEqual(settings.max_upload_mb, 50)
+        self.assertEqual(settings.max_pages_per_pdf, 100)
+        self.assertEqual(settings.max_chunks_per_run, 1000)
+        self.assertEqual(settings.max_files_per_run, 5)
 
     def test_missing_api_key_sets_validation_error(self) -> None:
         """A missing API key should be exposed as a user-facing message."""
