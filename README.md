@@ -4,6 +4,14 @@ Ask questions about your PDFs and get answers grounded in the actual text, with 
 
 The UI is a React + TypeScript single-page app talking to a FastAPI backend. A standalone Streamlit version (`app.py`) is also kept around for a quick single-process demo.
 
+## Screenshots
+
+![Ask your documents](docs/screenshots/chat.png)
+
+![Manage indexed documents](docs/screenshots/documents.png)
+
+![Grounded answer with inline citations](docs/screenshots/answer.png)
+
 ## How it works
 
 1. Extract text from each PDF page with `pypdf`, keeping the file name and page number.
