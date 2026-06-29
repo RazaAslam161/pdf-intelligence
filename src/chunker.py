@@ -12,8 +12,8 @@ def chunk_pages(
 ) -> list[TextChunk]:
     """Split page text into overlapping chunks for retrieval.
 
-    Chunks preserve source metadata and prefer paragraph or sentence boundaries
-    when a clean boundary appears near the chunk-size limit.
+    Chunks keep their source metadata and prefer paragraph or sentence
+    boundaries near the size limit.
     """
     _validate_chunk_settings(chunk_size, chunk_overlap)
 
@@ -58,7 +58,6 @@ def chunk_text(
 
 
 def _validate_chunk_settings(chunk_size: int, chunk_overlap: int) -> None:
-    """Validate chunk sizing inputs."""
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than 0.")
     if chunk_overlap < 0:

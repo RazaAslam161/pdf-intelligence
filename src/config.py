@@ -13,25 +13,20 @@ DEFAULT_CHROMA_PERSIST_DIR = "./chroma_db"
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_CHUNK_OVERLAP = 150
 DEFAULT_RETRIEVAL_TOP_K = 4
-# Retrieval honesty (P0-1): keep only chunks within this cosine distance of the
-# query. Chroma cosine distance is 1 - cosine_similarity (range 0..2); lower is
-# closer. Chunks above the threshold are treated as "not found" so off-topic
-# questions return the grounded no-context answer instead of confident citations.
-# Calibrated against text-embedding-3-small: on-topic questions (incl. generic
-# ones like "summarize this document") land ~0.64-0.82, while genuinely off-topic
-# questions land ~0.92+, so 0.85 sits in the gap — answers real questions about a
-# document while still rejecting unrelated ones. The LLM grounding prompt is the
-# second line of defence. Tune via RETRIEVAL_MAX_DISTANCE (0 disables filtering).
+# Keep only chunks within this cosine distance of the query (Chroma cosine
+# distance is 1 - similarity, range 0..2; lower is closer). Anything above the
+# threshold counts as "not found" so off-topic questions fall back to the
+# no-context answer. 0.85 sits in the gap between on-topic (~0.64-0.82) and
+# off-topic (~0.92+) for text-embedding-3-small. Set RETRIEVAL_MAX_DISTANCE to 0
+# to disable filtering.
 DEFAULT_RETRIEVAL_MAX_DISTANCE = 0.85
-# Indexing limits (P0-2): guard against cost blow-up / memory DoS from oversized
-# uploads. A value <= 0 disables that individual limit.
+# Guard against oversized uploads. A value <= 0 disables that individual limit.
 DEFAULT_MAX_UPLOAD_MB = 25
 DEFAULT_MAX_PAGES_PER_PDF = 500
 DEFAULT_MAX_CHUNKS_PER_RUN = 5000
 DEFAULT_MAX_FILES_PER_RUN = 20
-# OpenAI request controls (A5): bound latency and cost. request_timeout is the
-# per-request deadline (seconds) enforced by the OpenAI SDK; max_retries is the
-# SDK's automatic retry budget; max_output_tokens caps each answer's length.
+# Bound latency and cost: per-request deadline (seconds), the SDK's retry budget,
+# and a cap on each answer's length.
 DEFAULT_REQUEST_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_MAX_OUTPUT_TOKENS = 1024

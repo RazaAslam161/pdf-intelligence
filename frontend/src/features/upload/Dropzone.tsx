@@ -28,12 +28,9 @@ function UploadIcon() {
   );
 }
 
-/**
- * Drag-and-drop dropzone with a click-to-browse fallback (a hidden file input).
- * The whole zone is a real <button> so it is keyboard operable and gets the
- * global neutral focus ring. The dragover highlight uses NEUTRAL tokens only —
- * the accent is reserved for the citation/grounding signal.
- */
+// Drag-and-drop dropzone with a click-to-browse fallback. The zone is a real
+// <button> so it stays keyboard operable; the dragover highlight uses neutral
+// tokens since the accent is reserved for the citation signal.
 export function Dropzone({ onFiles, disabled = false }: DropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);

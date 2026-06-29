@@ -76,10 +76,9 @@ class EmbeddingService:
         )
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """Create embeddings for texts while preserving input order.
+        """Embed texts, preserving input order.
 
-        Multiple batches are embedded concurrently (embedding round-trips are the
-        indexing bottleneck); ThreadPoolExecutor.map preserves batch order.
+        Batches run concurrently since the round-trips dominate; map keeps order.
         """
         _validate_texts(texts)
         if not texts:

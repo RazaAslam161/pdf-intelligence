@@ -10,9 +10,8 @@ from typing import Any, Protocol
 from src.models import DocumentSummary, RetrievedChunk, TextChunk
 
 DEFAULT_COLLECTION_NAME = "pdf_chunks"
-# Tenant isolation (A8): every chunk carries a tenant_id in its metadata and all
-# reads/writes/deletes are scoped to it via a Chroma `where` filter. The default
-# tenant is the single-tenant namespace used when no caller identity is supplied.
+# Every chunk carries a tenant_id; reads/writes/deletes are scoped to it via a
+# Chroma `where` filter. This is the namespace used when no caller identity is given.
 DEFAULT_TENANT = "default"
 
 
@@ -191,12 +190,11 @@ def _validate_chunks_and_embeddings(
 
 
 def _scoped_id(chunk_id: str, tenant_id: str) -> str:
-    """Namespace a chunk's storage id by tenant, injectively.
+    """Namespace a chunk's storage id by tenant.
 
     chunk_id is content-addressed, so two tenants uploading the same file would
-    otherwise collide on one Chroma row. The encoding is length-prefixed so the
-    (tenant_id, chunk_id) -> id mapping stays unambiguous even when either part
-    contains the ':' delimiter (e.g. tenant 'a:b'+'c' vs tenant 'a'+'b:c').
+    otherwise collide. Length-prefixing the tenant keeps the mapping unambiguous
+    even when either part contains the ':' delimiter.
     """
     return f"{len(tenant_id)}:{tenant_id}:{chunk_id}"
 

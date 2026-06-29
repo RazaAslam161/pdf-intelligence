@@ -1,8 +1,4 @@
-/*
- * Types mirroring the planned FastAPI contract. The backend is not built yet,
- * so these are forward-looking stubs — keep them in sync with the API once it
- * exists.
- */
+// Types mirroring the FastAPI contract. Keep in sync with the backend.
 
 /** A retrieved chunk of a source PDF that grounds an answer. */
 export interface Source {
@@ -33,10 +29,7 @@ export interface IndexResponse {
   results: IndexFileResult[];
 }
 
-/**
- * One document currently held in the persisted vector store. Reflects the LIVE
- * store (across sessions), not the current upload session.
- */
+/** A document in the persisted vector store (across sessions, not just this upload). */
 export interface DocumentSummary {
   document_id: string;
   file_name: string;
@@ -44,10 +37,7 @@ export interface DocumentSummary {
   chunk_count: number;
 }
 
-/**
- * Snapshot of the persisted vector store. Returned by GET /documents and by
- * DELETE /documents (the post-clear state). `ready` is true iff total_chunks > 0.
- */
+/** Snapshot of the vector store from GET /documents (and DELETE /documents). `ready` is true when total_chunks > 0. */
 export interface StoreState {
   documents: DocumentSummary[];
   total_chunks: number;
@@ -59,10 +49,7 @@ export interface HealthResponse {
   status: string;
 }
 
-/**
- * Response shape for GET /config — server-advertised upload limits. Drives the
- * client-side pre-flight checks before any file is sent for indexing.
- */
+/** Response shape for GET /config — upload limits used for client-side pre-flight checks. */
 export interface ConfigResponse {
   /** Maximum size of a single upload, in megabytes. */
   max_upload_mb: number;

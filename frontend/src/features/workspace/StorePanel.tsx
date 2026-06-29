@@ -15,7 +15,6 @@ export interface StorePanelProps {
   onClear: () => void;
 }
 
-/** A check glyph for the ready summary — neutral, decorative. */
 function ReadyIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
@@ -30,7 +29,6 @@ function ReadyIcon() {
   );
 }
 
-/** A dot glyph for the empty summary — neutral, decorative. */
 function EmptyIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
@@ -41,16 +39,8 @@ function EmptyIcon() {
 }
 
 /**
- * The live "Documents in store" section. Sourced from GET /documents, so it
- * reflects what is actually persisted (including docs from a previous session),
- * NOT just files uploaded this session.
- *
- * Surfaces three things:
- *   1. a readiness summary (empty vs ready), conveyed by icon + text
- *   2. the document list (or a calm empty state)
- *   3. a destructive "Clear all documents" action behind an inline confirm
- *
- * Accent is NOT used anywhere here — neutral tokens only.
+ * The "Documents in store" section. Reads from GET /documents, so it reflects
+ * what's actually persisted, not just files uploaded this session.
  */
 export function StorePanel({
   state,

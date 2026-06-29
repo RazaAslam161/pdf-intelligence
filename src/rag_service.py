@@ -90,7 +90,7 @@ class RAGServiceError(RuntimeError):
 
 
 class IndexingLimitError(ValueError):
-    """Raised when an upload exceeds a configured indexing limit (P0-2)."""
+    """Raised when an upload exceeds a configured indexing limit."""
 
 
 class RAGService:
@@ -264,8 +264,8 @@ class RAGService:
         tenant_id: str,
         request_id: str,
     ) -> tuple[list[RetrievedChunk], float, float]:
-        """Embed the question, search the tenant's store, and apply the relevance
-        threshold (P0-1). Returns (relevant_chunks, embed_ms, search_ms)."""
+        """Embed the question, search the tenant's store, and drop chunks past the
+        relevance threshold. Returns (relevant_chunks, embed_ms, search_ms)."""
         try:
             embed_start = perf_counter()
             query_embedding = self.embedding_service.embed_texts([clean_question])[0]
@@ -281,9 +281,8 @@ class RAGService:
             logger.exception("answer_failed request_id=%s stage=retrieve", request_id)
             raise RAGServiceError("Failed to retrieve relevant PDF context.") from exc
 
-        # Retrieval honesty (P0-1): drop chunks past the relevance threshold so an
-        # off-topic question yields the grounded no-context answer with no
-        # citations, instead of confidently citing irrelevant passages.
+        # Drop chunks past the threshold so an off-topic question returns the
+        # no-context answer instead of citing irrelevant passages.
         relevant_chunks = filter_relevant_chunks(
             retrieved_chunks,
             self.settings.retrieval_max_distance,
@@ -407,10 +406,10 @@ def filter_relevant_chunks(
     retrieved_chunks: Sequence[RetrievedChunk],
     max_distance: float,
 ) -> list[RetrievedChunk]:
-    """Keep only chunks within the cosine-distance relevance threshold (P0-1).
+    """Keep only chunks within the cosine-distance relevance threshold.
 
-    Chunks without a score are kept (their relevance cannot be disproven). A
-    ``max_distance`` of 0 or less disables filtering.
+    Chunks without a score are kept. A ``max_distance`` of 0 or less disables
+    filtering.
     """
     if max_distance <= 0:
         return list(retrieved_chunks)
@@ -422,7 +421,7 @@ def filter_relevant_chunks(
 
 
 def validate_pdf_size(num_bytes: int, file_name: str, settings: RAGSettings) -> None:
-    """Reject an upload larger than the configured size cap (P0-2)."""
+    """Reject an upload larger than the configured size cap."""
     max_mb = settings.max_upload_mb
     if max_mb > 0 and num_bytes > max_mb * 1024 * 1024:
         size_mb = num_bytes / (1024 * 1024)
@@ -432,7 +431,7 @@ def validate_pdf_size(num_bytes: int, file_name: str, settings: RAGSettings) -> 
 
 
 def validate_page_count(page_count: int, file_name: str, settings: RAGSettings) -> None:
-    """Reject a document with more pages than the configured cap (P0-2)."""
+    """Reject a document with more pages than the configured cap."""
     max_pages = settings.max_pages_per_pdf
     if max_pages > 0 and page_count > max_pages:
         raise IndexingLimitError(
@@ -445,7 +444,7 @@ def validate_chunk_count(
     file_name: str,
     settings: RAGSettings,
 ) -> None:
-    """Reject a document producing more chunks than the cap before embedding (P0-2)."""
+    """Reject a document producing more chunks than the cap before embedding."""
     max_chunks = settings.max_chunks_per_run
     if max_chunks > 0 and chunk_count > max_chunks:
         raise IndexingLimitError(

@@ -112,7 +112,7 @@ def test_api_failure_raises_clear_error() -> None:
 
 
 def test_create_openai_client_passes_timeout_and_retries() -> None:
-    """A5: the embedding client is built with a bounded timeout + retry budget."""
+    """The embedding client is built with a bounded timeout and retry budget."""
     from unittest.mock import patch
 
     from src.embeddings import _create_openai_client

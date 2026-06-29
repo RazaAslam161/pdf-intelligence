@@ -24,7 +24,7 @@ class FakeSettings:
     """Minimal settings for RAG service tests.
 
     Indexing limits and the relevance threshold default to 0 (disabled) so the
-    existing orchestration tests are unaffected; per-test overrides exercise them.
+    orchestration tests are unaffected; per-test overrides exercise them.
     """
 
     openai_api_key = None
@@ -411,7 +411,7 @@ def test_validate_page_and_chunk_counts_enforce_caps() -> None:
 
 
 def test_answer_question_logs_correlated_line(caplog) -> None:
-    """A7: a successful answer emits one correlated line with timings + tokens."""
+    """A successful answer emits one correlated line with timings and tokens."""
     retrieved = [
         RetrievedChunk(
             chunk=TextChunk(
@@ -444,7 +444,7 @@ def test_answer_question_logs_correlated_line(caplog) -> None:
 
 
 def test_index_pdf_logs_outcome(caplog) -> None:
-    """A7: indexing emits a per-document outcome line."""
+    """Indexing emits a per-document outcome line."""
     service = RAGService(
         FakeSettings(),
         embedding_service=FakeEmbeddingService(),
@@ -463,7 +463,7 @@ def test_index_pdf_logs_outcome(caplog) -> None:
 
 
 def test_create_openai_client_passes_timeout_and_retries() -> None:
-    """A5: the per-request deadline + retry budget are configured on the client."""
+    """The per-request deadline and retry budget are configured on the client."""
     from unittest.mock import patch
 
     with patch("openai.OpenAI") as mock_openai:
@@ -483,7 +483,7 @@ def test_create_openai_client_passes_timeout_and_retries() -> None:
 
 
 def test_generation_aborts_when_openai_call_times_out() -> None:
-    """A5: a timed-out call (deadline reached) aborts with a clean error, no hang."""
+    """A timed-out call aborts with a clean error instead of hanging."""
 
     class TimingOutCompletions:
         def create(

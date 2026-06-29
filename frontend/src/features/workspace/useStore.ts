@@ -1,15 +1,5 @@
-/*
- * State logic for the live document store (the persisted vector store).
- *
- * Responsibilities:
- *   - fetch GET /documents on mount (the source of truth, across sessions)
- *   - expose refresh() so callers can re-pull after an upload batch completes
- *   - expose clear() which DELETEs the store and updates state IMMEDIATELY from
- *     the DELETE response (no follow-up GET, no manual refresh)
- *
- * Kept pure-ish: the only side effects are the network calls + setState. All
- * formatting/summary logic lives in the tested summary.ts module.
- */
+// State for the persisted document/vector store: load on mount, refresh after
+// uploads, and clear (which applies the DELETE response directly).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, clearDocuments, getDocuments } from "../../lib/api";
 import type { StoreState } from "../../lib/types";
@@ -80,8 +70,7 @@ export function useStore(): UseStoreResult {
     clearingRef.current = true;
     setClearing(true);
     try {
-      // The DELETE response IS the post-clear state — apply it directly so the
-      // list + counts update immediately, with no follow-up GET.
+      // The DELETE response is the post-clear state, so apply it directly.
       const next = await clearDocuments();
       if (!mountedRef.current) return;
       setState(next);

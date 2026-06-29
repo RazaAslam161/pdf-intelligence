@@ -20,11 +20,7 @@ const prefersReducedMotion = (): boolean =>
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
-/**
- * The conversation column: a scrollable list of turns above a fixed composer.
- * Shows the empty state when there are no turns. Auto-scrolls to the newest
- * turn as the thread grows.
- */
+/** Scrollable list of turns above a fixed composer; auto-scrolls to the newest turn. */
 export function ChatThread({
   turns,
   active,
@@ -37,7 +33,6 @@ export function ChatThread({
   const endRef = useRef<HTMLDivElement>(null);
   const hasTurns = turns.length > 0;
 
-  // Keep the latest turn in view as the thread grows / updates.
   useEffect(() => {
     if (!hasTurns) return;
     endRef.current?.scrollIntoView({

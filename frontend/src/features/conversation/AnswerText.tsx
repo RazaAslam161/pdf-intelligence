@@ -9,9 +9,9 @@ export interface AnswerTextProps {
   /** Zero-based index of the currently highlighted source, or null. */
   activeIndex: number | null;
   /**
-   * True while tokens are still streaming in. Renders a trailing caret and an
-   * SR-only status so the in-progress answer is announced. During streaming
-   * `sourceCount` is 0, so markers render as plain text until sources arrive.
+   * True while tokens are still streaming in. Shows a trailing caret and an
+   * SR-only status. While streaming `sourceCount` is 0, so markers stay plain
+   * text until the sources arrive.
    */
   streaming?: boolean;
   /** Hover/focus/click a marker -> activate that source. */
@@ -23,10 +23,8 @@ export interface AnswerTextProps {
 }
 
 /**
- * Renders an assistant answer as prose with inline citation markers. Each in-
- * range `[n]` becomes a superscript <button> (mono, accent) placed exactly
- * where it occurs; out-of-range markers render as plain text. Surrounding prose
- * is rendered verbatim. While `streaming`, a blinking caret trails the text.
+ * Renders an answer as prose with inline citation markers. In-range `[n]`
+ * markers become superscript buttons; out-of-range ones stay plain text.
  */
 export function AnswerText({
   answer,

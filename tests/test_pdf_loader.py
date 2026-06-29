@@ -45,7 +45,6 @@ def test_load_pdf_pages_extracts_text_and_metadata() -> None:
 
 
 def test_load_pdf_pages_skips_empty_pages() -> None:
-    """Blank pages should not produce empty PageText records."""
     pdf_bytes = _build_pdf([None, "Second page text"])
 
     pages = load_pdf_pages(pdf_bytes, "mixed.pdf")

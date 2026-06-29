@@ -24,12 +24,8 @@ function CloseIcon() {
   );
 }
 
-/**
- * The document panel: a dropzone over the list of documents added this session,
- * each with its per-file status. Self-contained — owns its upload state machine
- * via useUpload — so it never touches the chat feature. Rendered as a column the
- * AppShell main can swap in; the header keeps a toggle back to the chat.
- */
+/** Dropzone plus the list of documents added this session. Owns its own upload
+ * state via useUpload, so it stays independent of the chat feature. */
 export function UploadPanel({ onClose, onBatchComplete }: UploadPanelProps) {
   const { config, configError, files, uploading, skippedNote, addFiles, clear } =
     useUpload({ onBatchComplete });

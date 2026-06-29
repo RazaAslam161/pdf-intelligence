@@ -1,54 +1,28 @@
-/*
- * Pure, client-side pre-flight checks for the upload feature.
- *
- * These run BEFORE any /index call so we never ship a file the server is
- * guaranteed to reject. The logic is deliberately side-effect-free and fully
- * unit-tested (see preflight.test.ts).
- *
- * Two server-driven limits are enforced here:
- *   - per-file size cap (max_upload_mb)
- *   - the .pdf extension requirement
- * and one queue-shaping rule:
- *   - the per-run file-count cap (max_files_per_run)
- */
+// Client-side pre-flight checks so we don't ship files the server will reject.
+// Side-effect-free: enforces the size cap and .pdf requirement per file, plus
+// the per-run file-count cap.
 import type { ConfigResponse } from "../../lib/types";
 
-/** Minimal descriptor of a file for categorization — keeps the logic testable
- *  without needing a real File/Blob. */
+// Just enough of a file to categorize, so tests don't need a real File/Blob.
 export interface FileDescriptor {
   name: string;
   size: number;
 }
 
-/**
- * Pre-flight verdict for a single file, decided locally:
- *   - "ok"          passes all client checks; eligible to upload
- *   - "too_large"   size exceeds max_upload_mb
- *   - "unsupported" name does not end in .pdf
- */
 export type PreflightStatus = "ok" | "too_large" | "unsupported";
 
 export interface PreflightResult extends FileDescriptor {
   status: PreflightStatus;
 }
 
-/** Bytes in one megabyte (binary — matches the size shown to the user). */
 export const BYTES_PER_MB = 1024 * 1024;
 
-/** True when a file name ends with the .pdf extension (case-insensitive). */
 export function isPdfName(name: string): boolean {
   return /\.pdf$/i.test(name.trim());
 }
 
-/**
- * Categorize each file against the server config WITHOUT uploading anything.
- *
- * Order of checks (first failure wins):
- *   1. extension — must end in .pdf, else "unsupported"
- *   2. size      — must be <= max_upload_mb * 1MB, else "too_large"
- * Otherwise "ok". A boundary file (exactly at the cap) is accepted; a 0-byte
- * .pdf is "ok" (the server decides whether it is truly empty).
- */
+// Extension is checked before size, first failure wins. A file exactly at the
+// cap is accepted; the server has final say on empty 0-byte PDFs.
 export function validateFiles(
   files: FileDescriptor[],
   config: ConfigResponse,
@@ -68,19 +42,12 @@ export function validateFiles(
   });
 }
 
-/** Outcome of applying the per-run file-count cap. */
 export interface CountCapResult<T> {
-  /** The files that fit within max_files_per_run (the first N). */
   accepted: T[];
-  /** The files skipped because the run was already full. */
   skipped: T[];
 }
 
-/**
- * Apply the per-run file-count cap: keep the first `max_files_per_run` items and
- * return the rest as `skipped`. When the count is at or below the cap, `skipped`
- * is empty. Exactly-at-cap keeps everything.
- */
+// Keep the first max_files_per_run items; the rest land in skipped.
 export function applyFileCountCap<T>(
   files: T[],
   config: ConfigResponse,

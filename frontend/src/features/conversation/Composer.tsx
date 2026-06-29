@@ -10,11 +10,7 @@ export interface ComposerProps {
   disabled: boolean;
 }
 
-/**
- * Multiline question composer. Enter sends; Shift+Enter inserts a newline. The
- * textarea auto-grows up to a cap. Empty / whitespace-only input cannot be
- * sent. Disabled while a request is in flight.
- */
+/** Question composer: Enter sends, Shift+Enter newlines, textarea auto-grows up to a cap. */
 export function Composer({ onSubmit, disabled }: ComposerProps) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -26,7 +22,6 @@ export function Composer({ onSubmit, disabled }: ComposerProps) {
     if (!trimmed || disabled) return;
     onSubmit(trimmed);
     setValue("");
-    // Reset auto-grow height after clearing.
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }

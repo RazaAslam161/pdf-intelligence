@@ -3,7 +3,7 @@ import styles from "./IconButton.module.css";
 
 export interface IconButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** Required: icon-only buttons must have an accessible label. */
+  /** icon-only buttons need an accessible label */
   "aria-label": string;
   children: ReactNode;
 }

@@ -9,12 +9,9 @@ export interface ConfidenceCombProps {
 const SEGMENTS = [0, 1, 2, 3];
 
 /**
- * A 4-segment indicator encoding the similarity quartile of a source.
- *
- * Filled segments use the accent (grounding signal); empty segments are a 1px
- * muted outline. Meaning is also carried by `aria-label` ("confidence N of 4"),
- * so the indicator never relies on colour alone. When score is null the comb is
- * empty and the label reads "confidence unavailable".
+ * 4-segment indicator for a source's similarity quartile. Meaning is also in the
+ * aria-label so it doesn't rely on colour alone; a null score reads as
+ * "confidence unavailable".
  */
 export function ConfidenceComb({ score }: ConfidenceCombProps) {
   const filled = confidenceQuartile(score);

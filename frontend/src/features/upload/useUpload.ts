@@ -1,16 +1,5 @@
-/*
- * Sequential upload state machine for the document panel.
- *
- * Responsibilities:
- *   - fetch + cache GET /config once on mount (drives pre-flight)
- *   - accept dropped / browsed files, run pure pre-flight (preflight.ts), and
- *     turn each into a row with an initial status
- *   - upload eligible rows ONE AT A TIME (indexPdfs([file])) so progress is
- *     per-file and one file's failure never blocks the others
- *   - merge each server result back onto its row
- *
- * The component layer (UploadPanel) is purely presentational over this state.
- */
+// Sequential upload state machine for the document panel. Files are uploaded one
+// at a time so progress is per-file and one failure doesn't block the others.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, getConfig, indexPdfs } from "../../lib/api";
 import type { ConfigResponse, IndexFileResult } from "../../lib/types";
@@ -20,16 +9,13 @@ import {
   type PreflightStatus,
 } from "./preflight";
 
-/**
- * The lifecycle status of a single queued file. Pre-flight rejections
- * ("too_large" / "unsupported") and the queued/indexing/terminal server states
- * all live in one union so a row is always exactly one status.
- */
+// Pre-flight rejections and the server states all live in one union so a row is
+// always exactly one status.
 export type FileStatus =
   | "queued" // passed pre-flight, awaiting its turn to upload
   | "indexing" // /index call in flight for this file
   | "indexed" // server: success
-  | "rejected" // server: P0-2 limit hit (e.g. too many pages/chunks)
+  | "rejected" // server: limit hit (e.g. too many pages/chunks)
   | "failed" // server: other error, or a network/transport error
   | "too_large" // pre-flight: over the size cap (never uploaded)
   | "unsupported"; // pre-flight: not a .pdf (never uploaded)
@@ -100,15 +86,10 @@ export interface DrainCallbacks {
   patch: (id: string, patch: Partial<UploadFile>) => void;
 }
 
-/**
- * Drain a queue of rows, uploading each row's file in order and mapping the
- * result back onto the row. Mutates `queue` (via shift) so rows pushed mid-drain
- * are still handled. Each file is isolated: a throw is recorded on its row and
- * draining continues. Returns whether any file was processed.
- *
- * Pure (no React) so the core upload loop is unit-tested directly — the earlier
- * regression (rows stuck on "indexing", never uploaded) lived exactly here.
- */
+// Drain a queue of rows, uploading each in order and mapping the result back.
+// Mutates `queue` via shift so rows pushed mid-drain are still handled, and
+// isolates each file so a throw is recorded on its row and draining continues.
+// Kept pure (no React) so the core loop can be unit-tested directly.
 export async function drainUploadQueue(
   queue: UploadFile[],
   callbacks: DrainCallbacks,

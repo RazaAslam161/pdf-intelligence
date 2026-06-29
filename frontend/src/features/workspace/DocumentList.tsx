@@ -6,11 +6,7 @@ export interface DocumentListProps {
   documents: DocumentSummary[];
 }
 
-/**
- * The live list of documents in the store. When empty, renders the calm
- * empty-state sentence instead of an empty <ul>. Empty vs populated is conveyed
- * by text + structure, never color.
- */
+/** Renders the document list, or an empty-state line when there are none. */
 export function DocumentList({ documents }: DocumentListProps) {
   if (documents.length === 0) {
     return (

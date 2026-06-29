@@ -1,23 +1,11 @@
 /*
- * Marginalia Console — design tokens.
- * Dark is the DEFAULT theme (:root). Light is an opt-in override via
- * [data-theme="light"]. Reference these tokens via var() everywhere — do not
- * invent new colors.
- *
- * WCAG AA contrast (verified; AA = 4.5:1 normal text, 3:1 non-text/UI):
- *                   DARK      LIGHT
- *   text / bg       15.7:1    15.3:1
- *   text / surface  14.3:1    16.6:1
- *   muted / bg       7.7:1     5.5:1
- *   muted / surface  7.0:1     6.0:1
- *   accent / bg      9.9:1     4.9:1   (signal green; tightest headroom)
- *   accent / surface 9.0:1     5.3:1
- *   accent (focus ring, non-text) clears 3:1 in both modes.
- * All foreground/background pairs pass AA in both light and dark.
+ * Design tokens. Dark is the default (:root); light is opt-in via
+ * [data-theme="light"]. Always reference these via var().
+ * All foreground/background pairs are checked to pass WCAG AA in both modes.
  */
 
 :root {
-  /* --- Color: dark (default) --- */
+  /* Color: dark (default) */
   --color-bg: #0e1116;
   --color-surface: #161b22; /* cards / rail panels */
   --color-surface-raised: #1c2230; /* hover / active surfaces */
@@ -25,12 +13,11 @@
   --color-text-muted: #9ba6b5;
   --color-border: rgba(230, 234, 240, 0.12);
   --color-border-strong: rgba(230, 234, 240, 0.22);
-  /* Signal green — RESERVED for grounding / evidence / citation affordances
-     ONLY. Never use decoratively. */
+  /* Signal green — only for grounding/citation affordances, never decorative */
   --color-accent: #4fd1a1;
   --color-accent-hover: #6fe0b6;
 
-  /* --- Typography --- */
+  /* Typography */
   --font-heading: "Space Grotesk", system-ui, sans-serif;
   --font-body: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
@@ -43,7 +30,7 @@
 
   --lh-body: 1.6;
 
-  /* --- Spacing scale --- */
+  /* Spacing scale */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -51,7 +38,7 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  /* --- Radii --- */
+  /* Radii */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;

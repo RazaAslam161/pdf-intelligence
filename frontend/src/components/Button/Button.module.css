@@ -23,7 +23,7 @@
   cursor: not-allowed;
 }
 
-/* Default: outline / ghost — transparent bg, hairline border, surface on hover. */
+/* Ghost variant: transparent bg, hairline border, surface fill on hover. */
 .default {
   border-color: var(--color-border-strong);
   background-color: transparent;
@@ -33,10 +33,7 @@
   background-color: var(--color-surface-raised);
 }
 
-/*
- * Primary uses the accent color. Accent is RESERVED for grounding / evidence /
- * citation affordances — reserve this variant for those actions only.
- */
+/* Primary uses the accent color — keep it for citation/evidence actions only. */
 .primary {
   border-color: var(--color-accent);
   background-color: var(--color-accent);

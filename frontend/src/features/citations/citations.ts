@@ -1,25 +1,18 @@
 /*
- * Pure citation logic. No React, no DOM — fully unit-tested.
+ * Pure citation logic, no React or DOM.
  *
- * The assistant answer string MAY contain inline citation markers like [1],
- * [2] — 1-based indices that reference `sources` by POSITION (sources[0] is the
- * target of marker [1]). Markers may be absent entirely (older / uncited
- * answers); callers must handle that gracefully.
- *
- * `score` from the backend is COSINE DISTANCE (0 = identical, higher = less
- * similar), NOT a similarity. Display similarity is `1 - score`.
+ * Answers may contain 1-based inline markers like [1] that reference `sources`
+ * by position (so [1] -> sources[0]), or no markers at all. Backend `score` is
+ * cosine distance (0 = identical), so display similarity is `1 - score`.
  */
 
-/** A run of plain prose between (or around) citation markers. */
+/** Plain prose between or around citation markers. */
 export interface TextSegment {
   type: "text";
   value: string;
 }
 
-/**
- * A parsed citation marker. `index` is the ZERO-BASED source index
- * (marker [1] -> index 0), so it indexes straight into `sources`.
- */
+/** A parsed citation marker. `index` is zero-based, so [1] -> index 0. */
 export interface CiteSegment {
   type: "cite";
   /** Zero-based index into the sources array. */
@@ -28,42 +21,32 @@ export interface CiteSegment {
 
 export type AnswerSegment = TextSegment | CiteSegment;
 
-/** Matches a citation marker like [1], [12]. Captures the 1-based number. */
+/** Matches a marker like [1], [12]; captures the 1-based number. */
 const CITE_PATTERN = /\[(\d+)\]/g;
 
 /**
- * Parse an answer into an ordered list of text / cite segments.
- *
- * Behaviour:
- * - `[n]` becomes a CiteSegment with a zero-based `index` (n - 1).
- * - `[0]` is not a valid 1-based marker and is emitted as plain text.
- * - Surrounding prose is preserved verbatim as TextSegments, including the
- *   text between two adjacent markers (which may be empty and is then omitted).
- * - The caller is responsible for treating an `index` that is out of range
- *   (>= sources.length) as plain text — `parseAnswer` does not know how many
- *   sources exist. See `parseAnswerWithBounds` for the bounded variant.
- *
- * @example parseAnswer("a [1] b") ->
- *   [{text,"a "},{cite,0},{text," b"}]
+ * Parse an answer into ordered text / cite segments. `[n]` becomes a cite with
+ * zero-based index (n - 1); `[0]` and surrounding prose stay as text. Doesn't
+ * know how many sources exist — see `parseAnswerWithBounds` for the bounded
+ * variant that downgrades out-of-range markers.
  */
 export function parseAnswer(answer: string): AnswerSegment[] {
   const segments: AnswerSegment[] = [];
   if (!answer) return segments;
 
   let lastIndex = 0;
-  // Reset lastIndex defensively — the regex is module-scoped and stateful.
+  // The regex is module-scoped and stateful, so reset it.
   CITE_PATTERN.lastIndex = 0;
 
   let match: RegExpExecArray | null;
   while ((match = CITE_PATTERN.exec(answer)) !== null) {
     const oneBased = Number(match[1]);
 
-    // [0] is not a valid 1-based citation; keep it as literal text by skipping.
+    // [0] isn't a valid 1-based citation; leave it as literal text.
     if (oneBased < 1) {
       continue;
     }
 
-    // Emit any prose before this marker.
     if (match.index > lastIndex) {
       segments.push({ type: "text", value: answer.slice(lastIndex, match.index) });
     }
@@ -72,7 +55,6 @@ export function parseAnswer(answer: string): AnswerSegment[] {
     lastIndex = match.index + match[0].length;
   }
 
-  // Trailing prose after the final marker.
   if (lastIndex < answer.length) {
     segments.push({ type: "text", value: answer.slice(lastIndex) });
   }
@@ -81,9 +63,8 @@ export function parseAnswer(answer: string): AnswerSegment[] {
 }
 
 /**
- * Like `parseAnswer`, but a cite whose zero-based index falls outside
- * `[0, sourceCount)` is downgraded to plain text (the raw `[n]` marker). This
- * is what the renderer uses so out-of-range markers appear as ordinary text.
+ * Like `parseAnswer`, but a cite whose index falls outside `[0, sourceCount)`
+ * is downgraded to its raw `[n]` text. The renderer uses this.
  */
 export function parseAnswerWithBounds(
   answer: string,
@@ -93,8 +74,7 @@ export function parseAnswerWithBounds(
   const out: AnswerSegment[] = [];
 
   const pushText = (value: string): void => {
-    // Coalesce with a preceding text segment so adjacent prose / downgraded
-    // markers always normalize into a single segment.
+    // Coalesce with a preceding text segment so adjacent prose merges.
     const prev = out[out.length - 1];
     if (prev && prev.type === "text") {
       prev.value += value;
@@ -107,7 +87,6 @@ export function parseAnswerWithBounds(
     if (seg.type === "text") {
       pushText(seg.value);
     } else if (seg.index < 0 || seg.index >= sourceCount) {
-      // Out of range: render the original marker as literal text.
       pushText(`[${seg.index + 1}]`);
     } else {
       out.push(seg);
@@ -118,31 +97,19 @@ export function parseAnswerWithBounds(
 }
 
 /**
- * Convert a backend cosine-DISTANCE score into a display similarity rounded to
- * two decimals. Returns null when score is null (nothing to display).
- *
- *   score 0.17 -> 0.83 ; score 0    -> 1 ; score 1 -> 0
- *
- * Values are clamped to [0, 1] so a distance > 1 never yields a negative
- * similarity.
+ * Convert a cosine-distance score into a display similarity (1 - score) rounded
+ * to 2 dp and clamped to [0, 1]. Returns null when score is null.
  */
 export function similarityFromScore(score: number | null): number | null {
   if (score === null) return null;
   const sim = 1 - score;
   const clamped = Math.min(1, Math.max(0, sim));
-  // Round half-up to 2 dp.
   return Math.round(clamped * 100) / 100;
 }
 
 /**
- * Map a cosine-distance score to a 0..4 confidence quartile based on the
- * derived similarity (sim = 1 - score):
- *
- *   sim >= 0.70            -> 4
- *   sim >= 0.55            -> 3
- *   sim >= 0.40            -> 2
- *   sim present but < 0.40 -> 1
- *   score === null         -> 0  (no signal)
+ * Map a score to a 0..4 confidence quartile by similarity thresholds
+ * (0.70 / 0.55 / 0.40). Returns 0 when there's no score.
  */
 export function confidenceQuartile(score: number | null): 0 | 1 | 2 | 3 | 4 {
   if (score === null) return 0;

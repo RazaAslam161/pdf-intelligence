@@ -1,7 +1,4 @@
-/*
- * Global resets + base typography for Marginalia Console.
- * Tokens are imported first so var() references resolve everywhere.
- */
+/* Global resets and base typography. Tokens first so var() resolves everywhere. */
 @import "./tokens.css";
 
 *,
@@ -22,7 +19,7 @@ body,
 }
 
 html {
-  /* Set early; ThemeToggle also writes data-theme on <html>. */
+  /* ThemeToggle also writes data-theme on <html>. */
   color-scheme: dark light;
 }
 
@@ -72,9 +69,7 @@ a {
   color: inherit;
 }
 
-/* Visible focus ring for keyboard users. Neutral (text) color, not accent —
-   the accent is reserved exclusively for the grounding/citation signal. Text on
-   bg is ~15:1, far above the 3:1 WCAG 1.4.11 minimum for focus indicators. */
+/* Neutral focus ring, not accent — accent is reserved for the citation signal. */
 :focus-visible {
   outline: 2px solid var(--color-text);
   outline-offset: 2px;

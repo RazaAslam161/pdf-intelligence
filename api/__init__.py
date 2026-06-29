@@ -1,1 +1,1 @@
-"""FastAPI transport layer over the RAG service (M2)."""
+"""FastAPI transport layer over the RAG service."""

@@ -1,8 +1,7 @@
-"""FastAPI app exposing the RAG service over HTTP (M2).
+"""FastAPI app exposing the RAG service over HTTP.
 
-Thin transport only: it adapts the typed RAGService boundary (RagAnswer /
-IndexResult) to the JSON contract in ``schemas`` and never reaches into ``src``
-internals beyond the public service. The ``src`` backbone is unchanged.
+Thin transport layer: adapts RAGService to the JSON contract in ``schemas``
+without reaching into ``src`` internals beyond the public service.
 """
 
 from __future__ import annotations
@@ -50,9 +49,8 @@ def _allowed_origins() -> list[str]:
 def to_sources(chunks: Sequence[RetrievedChunk]) -> list[Source]:
     """Map retrieved chunks to citation DTOs, preserving order.
 
-    The list is 1:1 with the chunks (no dedup) so its positions line up with the
-    inline [n] markers the model emits — sources[0] is [1], and so on. Each DTO
-    keeps the relevance score so the client can show confidence.
+    Positions stay 1:1 with the chunks so they line up with the inline [n]
+    markers the model emits (sources[0] is [1]).
     """
     sources: list[Source] = []
     for retrieved in chunks:
@@ -73,9 +71,8 @@ def to_sources(chunks: Sequence[RetrievedChunk]) -> list[Source]:
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Warm the singletons on boot so the first request doesn't pay cold-start.
 
-    Builds the Chroma client and the embedding/OpenAI clients and primes the
-    embedding HTTP connection. Best-effort: a missing/invalid key logs a warning
-    and never blocks startup (health stays up).
+    Best-effort: a missing or invalid key just logs a warning and never blocks
+    startup, so health stays up.
     """
     try:
         get_vector_store()
@@ -197,8 +194,8 @@ def index(
 ) -> IndexResponse:
     """Index uploaded PDFs for the caller's tenant; each file is isolated.
 
-    Declared sync so FastAPI runs it in a worker thread: index_pdf does blocking
-    work (pypdf, embedding HTTP, Chroma) that must not block the event loop.
+    Declared sync so FastAPI runs it in a worker thread, since index_pdf does
+    blocking work (pypdf, embedding HTTP, Chroma) that must not block the event loop.
     """
     results: list[IndexFileResult] = []
     for upload in files:
@@ -208,9 +205,7 @@ def index(
             continue
 
         data = upload.file.read()
-        # Per-file isolation (A6): each file gets its own try/except so one bad
-        # file never aborts the batch; successes are already persisted by the
-        # time a later file fails.
+        # Each file gets its own try/except so one bad file never aborts the batch.
         try:
             result = service.index_pdf(data, file_name, tenant_id=tenant_id)
         except IndexingLimitError as exc:

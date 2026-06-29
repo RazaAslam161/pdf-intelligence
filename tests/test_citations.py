@@ -62,7 +62,6 @@ def _retrieved(
     page_number: int,
     text: str,
 ) -> RetrievedChunk:
-    """Build a retrieved chunk fixture."""
     return RetrievedChunk(
         chunk=TextChunk(
             chunk_id=chunk_id,

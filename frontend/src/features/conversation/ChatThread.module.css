@@ -34,8 +34,7 @@
   margin: 0 auto;
 }
 
-/* On narrow viewports the main column scrolls with the page, so let the thread
-   grow naturally rather than trapping the scroll. */
+/* On narrow screens let the thread grow with the page instead of trapping scroll. */
 @media (max-width: 900px) {
   .thread {
     height: auto;

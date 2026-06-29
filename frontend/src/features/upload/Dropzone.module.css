@@ -25,9 +25,8 @@
   cursor: not-allowed;
 }
 
-/* Dragover highlight — NEUTRAL only. Accent is reserved for grounding signals,
-   so the highlight is a stronger neutral border + raised surface (a solid
-   border replacing the dashed idle one reads clearly without color). */
+/* Dragover state: swap the dashed border for a solid neutral one and raise the
+   surface so it reads clearly without using color. */
 .zoneOver {
   composes: zone;
   border-style: solid;
@@ -53,8 +52,7 @@
   color: var(--color-text);
 }
 
-/* "browse" affordance — underline (neutral), not color, so it reads as
-   interactive without the accent. */
+/* Underline marks "browse" as interactive without relying on color. */
 .link {
   text-decoration: underline;
   text-underline-offset: 2px;

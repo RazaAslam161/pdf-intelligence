@@ -17,10 +17,9 @@ const prefersReducedMotion = (): boolean =>
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
 /**
- * The right-rail list of "margin slips" for the active assistant turn. Hovering
- * or focusing a slip highlights its marker(s) in the answer (via
- * onActiveIndexChange); when the active source changes from the answer side,
- * the matching slip is scrolled into view.
+ * Right-rail list of source slips for the active assistant turn. Hovering or
+ * focusing a slip highlights its marker(s) in the answer; when the active
+ * source changes from the answer side, the matching slip scrolls into view.
  */
 export function SourceRail({
   sources,

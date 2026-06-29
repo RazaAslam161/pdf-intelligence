@@ -18,7 +18,6 @@ def test_short_text_creates_one_chunk() -> None:
 
 
 def test_long_text_creates_multiple_chunks() -> None:
-    """Text longer than chunk_size should be split into multiple chunks."""
     pages = [_page("Sentence one. Sentence two. Sentence three. Sentence four.")]
 
     chunks = chunk_pages(pages, chunk_size=28, chunk_overlap=8)
@@ -39,7 +38,7 @@ def test_overlap_works() -> None:
 
 
 def test_metadata_is_preserved() -> None:
-    """Chunks should keep document, file, and page metadata."""
+    """Chunks should carry over the page's document, file, and page metadata."""
     pages = [
         PageText(
             document_id="doc-2",
@@ -86,7 +85,6 @@ def test_invalid_chunk_settings_raise_clear_error() -> None:
 
 
 def _page(text: str) -> PageText:
-    """Build a PageText fixture."""
     return PageText(
         document_id="doc-1",
         file_name="sample.pdf",

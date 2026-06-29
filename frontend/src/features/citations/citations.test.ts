@@ -104,7 +104,7 @@ describe("parseAnswerWithBounds", () => {
   });
 
   it("downgrades an out-of-range marker to plain text", () => {
-    // Only 1 source exists, so [2] is out of range -> literal "[2]".
+    // Only 1 source, so [2] is out of range and stays literal.
     expect(parseAnswerWithBounds("a [1] b [2] c", 1)).toEqual([
       { type: "text", value: "a " },
       { type: "cite", index: 0 },

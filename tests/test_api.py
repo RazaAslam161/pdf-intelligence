@@ -1,4 +1,4 @@
-"""Tests for the FastAPI transport layer (M2).
+"""Tests for the FastAPI transport layer.
 
 The RAG service is replaced with a fake via dependency override, so these tests
 exercise the HTTP contract without touching OpenAI or Chroma.
@@ -259,7 +259,7 @@ def test_index_marks_non_pdf_unsupported(client: TestClient) -> None:
 
 
 def test_ask_streams_special_chars_as_inert_json() -> None:
-    """A3: markup in streamed tokens + source fields stays inert JSON, never HTML."""
+    """Markup in streamed tokens + source fields stays inert JSON, never HTML."""
     app.dependency_overrides[get_rag_service] = lambda: DangerousRagService()
     try:
         response = TestClient(app).post("/ask", json={"question": "q"})
@@ -279,7 +279,7 @@ def test_ask_streams_special_chars_as_inert_json() -> None:
 
 
 def test_index_filename_is_inert_in_json(client: TestClient) -> None:
-    """A3: a markup-laden filename comes back as inert data, not HTML entities."""
+    """A markup-laden filename comes back as inert data, not HTML entities."""
     name = "</div>[x](y)<b>.pdf"
     files = [("files", (name, b"%PDF-1.4 fake", "application/pdf"))]
     response = client.post("/index", files=files)
@@ -301,7 +301,7 @@ def test_openapi_schema_exposes_endpoints() -> None:
 
 
 def test_config_exposes_upload_limits() -> None:
-    """B5: the client can read the P0-2 caps for pre-flight feedback."""
+    """The client can read the upload caps for pre-flight feedback."""
     response = TestClient(app).get("/config")
 
     assert response.status_code == 200
@@ -311,7 +311,7 @@ def test_config_exposes_upload_limits() -> None:
 
 
 def test_to_sources_preserves_order_for_citation_alignment() -> None:
-    """B4: sources are 1:1 and ordered so positions match inline [n] markers."""
+    """Sources are 1:1 and ordered so positions match inline [n] markers."""
     chunks = [
         RetrievedChunk(
             chunk=TextChunk("c1", "d1", "f.pdf", 1, "First passage."),
@@ -332,7 +332,7 @@ def test_to_sources_preserves_order_for_citation_alignment() -> None:
 
 
 def test_get_rag_service_caches_a_single_instance(monkeypatch) -> None:
-    """A4: the service provider returns the same cached instance."""
+    """The service provider returns the same cached instance."""
     deps.get_rag_service.cache_clear()
     monkeypatch.setattr(deps, "get_vector_store", lambda: object())
     monkeypatch.setattr(deps, "RAGService", lambda *args, **kwargs: object())
@@ -343,7 +343,7 @@ def test_get_rag_service_caches_a_single_instance(monkeypatch) -> None:
 
 
 def test_service_constructed_once_across_requests(monkeypatch) -> None:
-    """A4: no per-request construction — the Chroma/OpenAI clients build once."""
+    """No per-request construction — the Chroma/OpenAI clients build once."""
     deps.get_rag_service.cache_clear()
     constructions = {"count": 0}
 
@@ -392,7 +392,7 @@ class FakeStore:
 
 
 def test_documents_returns_live_store_state() -> None:
-    """B6: GET /documents reflects the live store, not a session."""
+    """GET /documents reflects the live store, not a session."""
     store = FakeStore()
     app.dependency_overrides[get_vector_store] = lambda: store
     try:
@@ -415,7 +415,7 @@ def test_documents_returns_live_store_state() -> None:
 
 
 def test_delete_documents_clears_and_returns_empty_state() -> None:
-    """B6: DELETE /documents wipes the store and returns the empty state."""
+    """DELETE /documents wipes the store and returns the empty state."""
     store = FakeStore()
     app.dependency_overrides[get_vector_store] = lambda: store
     try:
@@ -429,7 +429,7 @@ def test_delete_documents_clears_and_returns_empty_state() -> None:
 
 
 def test_index_isolates_per_file_failures(tmp_path) -> None:
-    """A6: one bad file fails alone; the others index, persist, and stay queryable."""
+    """One bad file fails alone; the others index, persist, and stay queryable."""
     store = VectorStore(str(tmp_path / "chroma"))
     settings = SimpleNamespace(
         chunk_size=1000,
@@ -473,7 +473,7 @@ def test_index_isolates_per_file_failures(tmp_path) -> None:
 
 
 def test_tenant_isolation_via_api(tmp_path) -> None:
-    """A8: a tenant cannot retrieve or clear another tenant's documents."""
+    """A tenant cannot retrieve or clear another tenant's documents."""
     store = VectorStore(str(tmp_path / "chroma"))
     settings = SimpleNamespace(
         chunk_size=1000,

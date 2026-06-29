@@ -96,7 +96,7 @@ def test_list_documents_empty_store_returns_empty(tmp_path) -> None:
 
 
 def test_tenant_isolation_for_search_count_and_clear(tmp_path) -> None:
-    """A8: search/count/clear/list are scoped per tenant; no cross-tenant leak."""
+    """search/count/clear/list are scoped per tenant; no cross-tenant leak."""
     store = VectorStore(str(tmp_path / "chroma"))
     store.add_chunks([_chunk("a-1", "Alpha")], [[1.0, 0.0]], tenant_id="alice")
     store.add_chunks([_chunk("b-1", "Beta")], [[0.0, 1.0]], tenant_id="bob")
@@ -125,7 +125,7 @@ def test_tenant_isolation_for_search_count_and_clear(tmp_path) -> None:
 
 
 def test_scoped_ids_do_not_collide_across_tenants(tmp_path) -> None:
-    """A8: tenant+chunk_id namespacing stays injective even with ':' in the ids."""
+    """tenant+chunk_id namespacing stays injective even with ':' in the ids."""
     store = VectorStore(str(tmp_path / "chroma"))
     # A naive "tenant:chunk_id" scheme would map both of these to "a:b:c" and
     # silently overwrite one tenant's row with the other's.

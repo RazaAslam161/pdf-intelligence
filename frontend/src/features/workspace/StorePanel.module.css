@@ -21,7 +21,7 @@
   color: var(--color-text-muted);
 }
 
-/* Inline destructive confirm — neutral hairline, no color signal. */
+/* Inline destructive confirm, neutral styling with no color signal. */
 .confirm {
   display: flex;
   align-items: center;
@@ -34,9 +34,7 @@
   color: var(--color-text);
 }
 
-/* Readiness summaries: meaning carried by icon + text, never color. Ready and
-   empty differ in icon and wording (and a slightly stronger border for ready)
-   so they are distinguishable without relying on hue. */
+/* Ready vs empty differ by icon, wording, and border weight so they read without relying on color. */
 .summaryReady,
 .summaryEmpty {
   display: flex;
@@ -70,7 +68,7 @@
   display: block;
 }
 
-/* Calm load / error status lines. */
+/* Load / error status lines. */
 .status {
   font-size: var(--fs-small);
   line-height: var(--lh-body);

@@ -3,22 +3,15 @@ import { ThemeToggle } from "../ThemeToggle/ThemeToggle";
 import styles from "./AppShell.module.css";
 
 export interface AppShellProps {
-  /** Primary conversation column content. */
   children: ReactNode;
-  /** Right-hand source rail content. */
   rail: ReactNode;
-  /** Optional quiet status indicator rendered in the header. */
   status?: ReactNode;
-  /** Optional header action(s) (e.g. an "Add documents" toggle), rendered
-   *  before the theme toggle. */
+  /** Header action(s) rendered before the theme toggle. */
   headerActions?: ReactNode;
 }
 
-/**
- * Top-level layout: an instrument header over a split body — a primary
- * conversation column (flex:1) and a right "source rail" <aside>. Below 900px
- * the rail stacks under the main column. Uses semantic landmarks throughout.
- */
+// Header over a split body: conversation column plus a source rail that stacks
+// underneath below 900px.
 export function AppShell({
   children,
   rail,

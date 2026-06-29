@@ -31,10 +31,9 @@ describe("drainUploadQueue", () => {
     });
 
     expect(processed).toBe(true);
-    // The bug: zero files were ever uploaded. Each must reach the uploader.
+    // every file must reach the uploader
     expect(uploaded).toEqual(["a.pdf", "b.pdf", "c.pdf"]);
     expect(queue.length).toBe(0);
-    // Each row goes indexing -> indexed.
     expect(patches.filter((p) => p.status === "indexing").length).toBe(3);
     expect(patches.filter((p) => p.status === "indexed").length).toBe(3);
   });

@@ -5,18 +5,16 @@ import styles from "./FileRow.module.css";
 
 export interface FileRowProps {
   file: UploadFile;
-  /** Server-advertised size cap (MB), for the "over the N MB limit" message. */
+  /** Size cap in MB, used in the "over the N MB limit" message. */
   maxUploadMb: number;
 }
 
-/** Per-status presentation: an icon + a short human label. NEVER color-only —
- *  the label always carries the meaning too (WCAG 1.4.1). */
+// Icon + label per status. Label always carries the meaning so we never rely on
+// color alone (WCAG 1.4.1).
 interface StatusMeta {
   label: string;
   icon: ReactNode;
-  /** Whether this status reads as a "problem" (muted-emphasis styling). */
   problem: boolean;
-  /** Whether to render the small in-progress spinner instead of an icon. */
   spinning?: boolean;
 }
 
@@ -112,16 +110,12 @@ function statusMeta(status: FileStatus): StatusMeta {
   }
 }
 
-/**
- * One document row: name, size, a status (icon + label + text), and — for
- * indexed rows — page/chunk counts. Each row is a focusable list item so the
- * list is keyboard-reachable. Status is conveyed by icon AND label AND
- * supporting text, never color alone.
- */
+// One document row: name, size, status, and page/chunk counts for indexed rows.
+// Focusable list item so the list stays keyboard-reachable.
 export function FileRow({ file, maxUploadMb }: FileRowProps) {
   const meta = statusMeta(file.status);
 
-  // The supporting detail line, by status.
+  // Supporting detail line, varies by status.
   let detail: string | null = null;
   if (file.status === "too_large") {
     detail = `${formatBytes(file.size)} — over the ${maxUploadMb} MB limit`;

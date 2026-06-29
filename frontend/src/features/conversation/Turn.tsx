@@ -4,9 +4,9 @@ import styles from "./Turn.module.css";
 
 export interface TurnProps {
   turn: ConversationTurn;
-  /** True when this turn's sources are the active set shown in the rail. */
+  /** Whether this turn's sources are the ones currently shown in the rail. */
   isActiveTurn: boolean;
-  /** Active source index within the active turn, or null. */
+  /** Selected source index for the active turn, or null. */
   activeIndex: number | null;
   onMarkerActivate: (turnId: string, index: number) => void;
   onMarkerDeactivate: () => void;

@@ -166,12 +166,12 @@ def test_build_indexing_feedback_detects_scanned_pdf_case() -> None:
 
 
 def test_esc_escapes_markup_metacharacters() -> None:
-    """A3: the escape helper neutralizes HTML metacharacters."""
+    """The escape helper neutralizes HTML metacharacters."""
     assert _esc('<b>&"') == "&lt;b&gt;&amp;&quot;"
 
 
 def test_status_card_html_escapes_dynamic_values() -> None:
-    """A3: dynamic values in the unsafe_allow_html status card are escaped."""
+    """Dynamic values in the unsafe_allow_html status card are escaped."""
     markup = _status_card_html(
         title="App ready",
         api_status="Connected",

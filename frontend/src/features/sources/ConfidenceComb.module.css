@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  /* Align with surrounding mono metrics. */
+  /* line up with the mono metrics next to it */
   line-height: 1;
 }
 
@@ -13,12 +13,12 @@
   border-radius: 1px;
 }
 
-/* Filled = grounding signal. Accent is allowed here. */
+/* filled segments show the grounding signal */
 .segmentFilled {
   background-color: var(--color-accent);
 }
 
-/* Empty = 1px muted outline, no fill. */
+/* empty segments are just a muted outline */
 .segmentEmpty {
   background-color: transparent;
   border: 1px solid var(--color-border-strong);

@@ -66,7 +66,7 @@ def extract_pdf_pages(file: BinaryIO | bytes, source_name: str) -> list[PageText
 
 
 def _read_pdf(pdf_bytes: bytes, file_name: str) -> PdfReader:
-    """Create a PdfReader with clear user-facing errors."""
+    """Open the PDF, raising readable errors for bad or encrypted files."""
     try:
         reader = PdfReader(BytesIO(pdf_bytes))
     except Exception as exc:

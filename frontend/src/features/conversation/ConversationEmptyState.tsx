@@ -1,9 +1,6 @@
 import styles from "./ConversationEmptyState.module.css";
 
-/**
- * Placeholder for the conversation column before any exchange exists. Chat
- * logic arrives in a later milestone; this is the empty / first-run state only.
- */
+// Empty / first-run state for the conversation column, before any exchange exists.
 export function ConversationEmptyState() {
   return (
     <div className={styles.empty}>

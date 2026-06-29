@@ -6,7 +6,7 @@
   background-color: var(--color-bg);
 }
 
-/* Instrument header: wordmark, quiet status slot, theme toggle. */
+/* Top bar: wordmark, status slot, theme toggle. */
 .header {
   display: flex;
   align-items: center;
@@ -37,7 +37,6 @@
   color: var(--color-text-muted);
 }
 
-/* Split body. */
 .body {
   display: flex;
   flex: 1;

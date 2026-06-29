@@ -1,10 +1,9 @@
-"""Structured application logging (A7).
+"""Structured application logging.
 
-A small wrapper over the stdlib so every module logs through one namespaced
-logger (``ragpdf.*``) whose level honors the ``LOG_LEVEL`` env var. We do not
-hijack the root logger: under uvicorn/Streamlit the host already configures
-handlers and our records propagate to them; for a bare ``python`` run we install
-a basic handler only if nothing else has.
+Thin wrapper over the stdlib so everything logs through one namespaced logger
+(``ragpdf.*``) at ``LOG_LEVEL``. We avoid touching the root logger when a host
+like uvicorn/Streamlit already set up handlers, and only install a basic one for
+bare ``python`` runs.
 """
 
 from __future__ import annotations

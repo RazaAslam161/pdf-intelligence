@@ -6,7 +6,7 @@ type Theme = "dark" | "light";
 
 const STORAGE_KEY = "pdf-intelligence-theme";
 
-/** Resolve the initial theme: stored choice > system preference > dark. */
+// Prefer a stored choice, then system preference, otherwise dark.
 function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "dark";
 
@@ -54,7 +54,6 @@ function MoonIcon() {
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
 
-  // Keep the DOM attribute and persisted value in sync with state.
   useEffect(() => {
     applyTheme(theme);
     window.localStorage.setItem(STORAGE_KEY, theme);

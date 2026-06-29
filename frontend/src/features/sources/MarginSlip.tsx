@@ -15,15 +15,9 @@ export interface MarginSlipProps {
   onDeactivate: () => void;
 }
 
-/**
- * A "margin slip" card for one grounding source. Shows the source number, file
- * name + page badge, the preview (the whole preview underlined in accent as the
- * evidence span — we have no sub-span offsets), the display similarity as a
- * real number, and a confidence comb.
- *
- * The accent appears here ONLY as the evidence underline, the comb fill, and
- * the active left-edge highlight — all grounding signals.
- */
+// Card for one grounding source: number, file name + page badge, preview
+// (underlined whole since we have no sub-span offsets), similarity, and the
+// confidence comb.
 export const MarginSlip = forwardRef<HTMLLIElement, MarginSlipProps>(
   function MarginSlip(
     { source, number, active, onActivate, onDeactivate },

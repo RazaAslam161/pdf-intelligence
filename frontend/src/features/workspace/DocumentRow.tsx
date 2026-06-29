@@ -6,7 +6,7 @@ export interface DocumentRowProps {
   document: DocumentSummary;
 }
 
-/** A small document glyph — purely decorative, neutral stroke. */
+/** Decorative document glyph. */
 function DocIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
@@ -20,11 +20,7 @@ function DocIcon() {
   );
 }
 
-/**
- * One row in the live "Documents in store" list: file name + page/chunk counts.
- * A focusable list item so the list is keyboard-reachable. Meaning is carried by
- * text + structure (and a neutral icon), never color.
- */
+/** One row in the documents list, focusable so the list is keyboard-reachable. */
 export function DocumentRow({ document }: DocumentRowProps) {
   const meta = documentMeta(document.page_count, document.chunk_count);
 

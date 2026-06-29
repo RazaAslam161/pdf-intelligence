@@ -10,9 +10,7 @@
   transition: border-color 120ms ease, background-color 120ms ease;
 }
 
-/* Problem rows (rejected / failed / too_large / unsupported) read with a
-   slightly stronger hairline so they stand out WITHOUT relying on color. The
-   icon + label + detail carry the actual meaning. */
+/* Stronger hairline so problem rows stand out without leaning on color alone. */
 .rowProblem {
   composes: row;
   border-color: var(--color-border-strong);
@@ -85,8 +83,7 @@
   white-space: nowrap;
 }
 
-/* In-progress spinner — neutral stroke, respects reduced motion (global rule
-   neutralizes the animation duration). */
+/* Reduced-motion is handled by the global rule that kills the duration. */
 .spinner {
   animation: upload-spin 900ms linear infinite;
   transform-origin: center;

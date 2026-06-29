@@ -174,7 +174,6 @@ describe("formatBytes", () => {
   });
 
   it("formats an over-cap size for the user message", () => {
-    // ~31.2 MB, matching the spec's example wording.
     expect(formatBytes(Math.round(31.2 * BYTES_PER_MB))).toBe("31.2 MB");
   });
 });

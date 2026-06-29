@@ -1,10 +1,5 @@
-/*
- * Typed API client for the FastAPI backend.
- *
- * POST /ask streams its answer as Server-Sent Events (text/event-stream); the
- * other endpoints return plain JSON. The chat client therefore uses the
- * streaming `askStream()` (below); the JSON endpoints use `parseJson()`.
- */
+// Typed API client for the FastAPI backend. /ask streams answers as SSE; the
+// rest return plain JSON.
 import type {
   ConfigResponse,
   HealthResponse,
@@ -16,11 +11,8 @@ import { parseSseChunk } from "./sse";
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
-/**
- * Optional tenant id sent as the X-Tenant-Id header on /ask. Driven by an env
- * var so a single build can target multiple tenants; omitted entirely when
- * unset (no empty header is sent).
- */
+// Optional tenant id for the X-Tenant-Id header on /ask. Env-driven so one
+// build can target multiple tenants; omitted when unset.
 const TENANT_ID: string | undefined = import.meta.env.VITE_TENANT_ID;
 
 /** Error thrown when the backend responds with a non-2xx status. */
@@ -57,20 +49,9 @@ export interface AskStreamHandlers {
   signal?: AbortSignal;
 }
 
-/**
- * POST /ask — submit a question and consume the streamed answer.
- *
- * The backend responds with `text/event-stream`; tokens arrive progressively,
- * the grounding sources arrive once near the end, then a terminal `done` (or
- * `error`) event. This reads the response body with a streaming reader, decodes
- * UTF-8 incrementally, splits complete SSE records via the pure `parseSseChunk`
- * helper, and dispatches each event to the matching handler.
- *
- * Resolves when the stream ends cleanly (a `done` event or the body closing).
- * Server `error` events and transport/HTTP failures are reported via
- * `onError` and also resolve (so the caller's completion logic runs once); an
- * AbortError is swallowed silently.
- */
+// POST /ask — submit a question and consume the streamed answer. Resolves once
+// the stream ends, whether cleanly, via a server error event, or on a transport
+// failure (all reported through onError). AbortError is swallowed.
 export async function askStream(
   question: string,
   handlers: AskStreamHandlers,

@@ -1,23 +1,11 @@
-/*
- * Conversation state shapes for the chat thread and the source rail.
- *
- * A "turn" is one message in the thread. User turns carry only text; assistant
- * turns additionally carry grounding sources and a status (the answer is
- * requested asynchronously, so a turn can be pending or errored before it has
- * content).
- */
+// Conversation state for the chat thread and source rail. A turn is one message;
+// assistant turns also carry sources and a status since answers arrive async.
 import type { Source } from "../../lib/types";
 
 export type TurnRole = "user" | "assistant";
 
-/**
- * Lifecycle of an assistant turn while its answer is being fetched:
- *  - "pending": request sent, no tokens have arrived yet (shows the dots).
- *  - "streaming": tokens are arriving and the answer renders progressively
- *    with a caret; sources have not arrived yet.
- *  - "complete": the stream finished (answer + any sources are final).
- *  - "error": generation or transport failed.
- */
+// Lifecycle of an assistant turn: pending (no tokens yet), streaming (answer
+// rendering), complete (answer + sources final), or error.
 export type TurnStatus = "pending" | "streaming" | "complete" | "error";
 
 export interface ConversationTurn {
@@ -41,13 +29,8 @@ export const emptyConversation: ConversationState = {
   turns: [],
 };
 
-/**
- * The currently active grounding link: which assistant turn's sources are shown
- * in the rail, and which single source (if any) is highlighted on both ends of
- * the marker <-> slip sync. `sourceIndex` is a zero-based index into that turn's
- * sources, or null when a whole turn is active but no individual source is
- * focused/hovered.
- */
+// The active grounding link: which turn's sources show in the rail, and which
+// source is highlighted. sourceIndex is null when no individual source is focused.
 export interface ActiveSource {
   turnId: string;
   sourceIndex: number | null;

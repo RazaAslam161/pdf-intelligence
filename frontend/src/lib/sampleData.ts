@@ -1,8 +1,5 @@
-/*
- * In-memory sample AskResponse for local visual development WITHOUT a live
- * backend. This is ONLY used when `VITE_API_BASE` is unset (see App.tsx). The
- * default runtime path always calls the real `api.ask()`.
- */
+// Fallback sample response for local UI work when VITE_API_BASE is unset.
+// Normally App.tsx calls the real api.ask().
 import type { AskResponse } from "./types";
 
 export const SAMPLE_ASK_RESPONSE: AskResponse = {

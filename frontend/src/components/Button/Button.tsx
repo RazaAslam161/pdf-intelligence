@@ -4,12 +4,7 @@ import styles from "./Button.module.css";
 type ButtonVariant = "default" | "primary";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /**
-   * "default" is an outline/ghost button (transparent surface, hairline
-   * border). "primary" uses the accent color — accent is RESERVED for grounding
-   * / evidence actions, so only use "primary" for those (e.g. "Ask",
-   * "View source"), never for generic CTAs.
-   */
+  /** Only use "primary" for grounding/evidence actions like "Ask" or "View source", not generic CTAs. */
   variant?: ButtonVariant;
   children: ReactNode;
 }

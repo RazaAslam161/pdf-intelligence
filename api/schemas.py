@@ -1,7 +1,6 @@
-"""Pydantic request/response models — the public JSON contract.
+"""Pydantic request/response models for the JSON API.
 
-These intentionally mirror the frontend types in ``frontend/src/lib/types.ts`` so
-the React client and the API never drift.
+Kept in sync with the frontend types in ``frontend/src/lib/types.ts``.
 """
 
 from __future__ import annotations
@@ -54,7 +53,7 @@ class HealthResponse(BaseModel):
 
 
 class ConfigResponse(BaseModel):
-    """Upload limits (P0-2) the client surfaces pre-flight, before sending bytes."""
+    """Upload limits the client checks before sending bytes."""
 
     max_upload_mb: int
     max_pages_per_pdf: int

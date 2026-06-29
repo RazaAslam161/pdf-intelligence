@@ -227,12 +227,7 @@ def build_chat_message(
 
 
 def _esc(value: object) -> str:
-    """HTML-escape a dynamic value before interpolating into unsafe_allow_html.
-
-    Output-encoding policy (A3): every dynamic value rendered inside a raw-HTML
-    block is escaped at the interpolation point so document- or config-derived
-    text can never inject markup. The API tier never emits HTML at all.
-    """
+    """HTML-escape a dynamic value before interpolating into raw HTML."""
     return html.escape(str(value))
 
 

@@ -39,7 +39,7 @@
   color: var(--color-text);
 }
 
-/* "Per-run limit" skip note — neutral, supporting text. */
+/* Skip note shown when a file exceeds the per-run limit. */
 .note {
   font-size: var(--fs-small);
   line-height: var(--lh-body);

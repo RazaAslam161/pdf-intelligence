@@ -31,8 +31,6 @@ CONFIG_ENV_KEYS = {
 
 
 class SettingsTests(unittest.TestCase):
-    """Settings loading behavior."""
-
     def test_get_settings_uses_safe_defaults(self) -> None:
         """Unset optional values should fall back to safe defaults."""
         env = {

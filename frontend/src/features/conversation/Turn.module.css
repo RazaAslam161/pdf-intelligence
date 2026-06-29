@@ -6,7 +6,6 @@
   max-width: 68ch;
 }
 
-/* User turns align right; assistant turns align left. */
 .userTurn {
   align-self: flex-end;
   align-items: flex-end;
@@ -30,14 +29,12 @@
   padding: var(--space-3) var(--space-4);
 }
 
-/* User: raised surface, hairline border — neutral, no accent. */
 .userTurn .bubble {
   background-color: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-bottom-right-radius: var(--radius-sm);
 }
 
-/* Assistant: quieter surface, distinct corner. */
 .assistantTurn .bubble {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -54,12 +51,11 @@
 .error {
   font-size: var(--fs-small);
   line-height: var(--lh-body);
-  /* Neutral muted text — error is conveyed by role="alert" + wording, not by
-     a decorative accent colour. */
+  /* Muted text; the alert role and wording carry the error, not colour. */
   color: var(--color-text-muted);
 }
 
-/* Pending answer: three quietly pulsing dots. */
+/* Pending answer indicator. */
 .pending {
   display: inline-flex;
   align-items: center;
