@@ -18,3 +18,10 @@
   line-height: var(--lh-body);
   color: var(--color-text-muted);
 }
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+}

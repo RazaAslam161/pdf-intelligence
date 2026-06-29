@@ -1,0 +1,39 @@
+.answer {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+/* Superscript wrapper keeps the marker raised without inflating line height. */
+.markerWrap {
+  /* sup default styling is fine; isolate so vertical-align is predictable. */
+  font-size: inherit;
+}
+
+.marker {
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-accent);
+  background-color: transparent;
+  border: none;
+  padding: 0 1px;
+  margin: 0 1px;
+  border-radius: 2px;
+  vertical-align: baseline;
+  transition: background-color 120ms ease;
+}
+
+.marker:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+}
+
+/* Active marker (synced from the rail or from itself) — accent ring/fill. */
+.markerActive {
+  composes: marker;
+  background-color: var(--color-accent);
+  color: var(--color-bg);
+}

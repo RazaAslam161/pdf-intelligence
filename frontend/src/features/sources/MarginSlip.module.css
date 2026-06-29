@@ -1,0 +1,125 @@
+.slip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  padding-left: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  /* Left-edge highlight lives in a pseudo-element; reserve its lane. */
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+  outline: none;
+}
+
+.slip::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  background-color: transparent;
+  transition: background-color 120ms ease;
+}
+
+/* Active = grounding highlight. Accent left-edge + ring are allowed. */
+.slipActive {
+  composes: slip;
+  border-color: var(--color-accent);
+  background-color: var(--color-surface-raised);
+}
+
+.slipActive::before {
+  background-color: var(--color-accent);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.number {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  /* Small fixed lane so file names line up. */
+  min-width: 1.4em;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fileName {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.pageBadge {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--color-text-muted);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.preview {
+  font-size: var(--fs-small);
+  line-height: var(--lh-body);
+  color: var(--color-text);
+}
+
+/* The whole preview is the evidence span: underlined in accent. */
+.evidence {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.similarity {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+}
+
+.simLabel {
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.simValue {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.noScore {
+  color: var(--color-text-muted);
+  font-style: italic;
+}

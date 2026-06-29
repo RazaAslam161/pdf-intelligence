@@ -1,0 +1,47 @@
+.thread {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  gap: var(--space-4);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  list-style: none;
+  max-width: 80ch;
+  margin: 0 auto;
+  padding-bottom: var(--space-4);
+}
+
+.turnItem {
+  display: flex;
+  flex-direction: column;
+}
+
+.composerSlot {
+  flex: 0 0 auto;
+  max-width: 80ch;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* On narrow viewports the main column scrolls with the page, so let the thread
+   grow naturally rather than trapping the scroll. */
+@media (max-width: 900px) {
+  .thread {
+    height: auto;
+  }
+
+  .scroll {
+    overflow-y: visible;
+  }
+}

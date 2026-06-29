@@ -1,0 +1,102 @@
+.userTurn,
+.assistantTurn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 68ch;
+}
+
+/* User turns align right; assistant turns align left. */
+.userTurn {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.assistantTurn {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.roleLabel {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.bubble {
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* User: raised surface, hairline border — neutral, no accent. */
+.userTurn .bubble {
+  background-color: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Assistant: quieter surface, distinct corner. */
+.assistantTurn .bubble {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.userText {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+.error {
+  font-size: var(--fs-small);
+  line-height: var(--lh-body);
+  /* Neutral muted text — error is conveyed by role="alert" + wording, not by
+     a decorative accent colour. */
+  color: var(--color-text-muted);
+}
+
+/* Pending answer: three quietly pulsing dots. */
+.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 1.2em;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-text-muted);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
+    opacity: 0.6;
+  }
+}
