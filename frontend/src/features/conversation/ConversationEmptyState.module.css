@@ -1,0 +1,29 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 56ch;
+  margin: 0 auto;
+  padding-top: var(--space-6);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--fs-title);
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.lede {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--color-text);
+}
+
+.hint {
+  margin-top: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--fs-small);
+  color: var(--color-text-muted);
+}

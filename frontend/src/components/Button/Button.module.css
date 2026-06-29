@@ -1,0 +1,49 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--color-text);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Default: outline / ghost — transparent bg, hairline border, surface on hover. */
+.default {
+  border-color: var(--color-border-strong);
+  background-color: transparent;
+}
+
+.default:hover:not(:disabled) {
+  background-color: var(--color-surface-raised);
+}
+
+/*
+ * Primary uses the accent color. Accent is RESERVED for grounding / evidence /
+ * citation affordances — reserve this variant for those actions only.
+ */
+.primary {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  color: var(--color-bg);
+}
+
+.primary:hover:not(:disabled) {
+  border-color: var(--color-accent-hover);
+  background-color: var(--color-accent-hover);
+}

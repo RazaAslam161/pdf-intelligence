@@ -1,0 +1,8 @@
+/*
+ * ThemeToggle relies on IconButton for its core visual styling. This wrapper
+ * lets the toggle sit inline within the header status cluster.
+ */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+}
