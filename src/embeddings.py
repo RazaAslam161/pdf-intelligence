@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Protocol
 
 from src.observability import get_logger
 
 logger = get_logger("embeddings")
 
-DEFAULT_EMBEDDING_BATCH_SIZE = 100
+DEFAULT_EMBEDDING_BATCH_SIZE = 256
+DEFAULT_EMBED_CONCURRENCY = 8
 MISSING_API_KEY_MESSAGE = (
     "OPENAI_API_KEY is missing. Add it to your .env file before creating embeddings."
 )
@@ -23,6 +25,8 @@ class EmbeddingSettings(Protocol):
     openai_embedding_model: str
     request_timeout: float
     max_retries: int
+    embed_batch_size: int
+    embed_concurrency: int
 
 
 class EmbeddingServiceError(RuntimeError):
@@ -37,7 +41,8 @@ class EmbeddingService:
         settings: EmbeddingSettings,
         *,
         client: Any | None = None,
-        batch_size: int = DEFAULT_EMBEDDING_BATCH_SIZE,
+        batch_size: int | None = None,
+        concurrency: int | None = None,
     ) -> None:
         """Create an embedding service from settings and an optional client."""
         api_key = settings.openai_api_key
@@ -46,11 +51,23 @@ class EmbeddingService:
             raise EmbeddingServiceError(MISSING_API_KEY_MESSAGE)
         if client is None:
             _validate_openai_compatible_settings(str(api_key), base_url)
-        if batch_size <= 0:
+
+        resolved_batch = (
+            batch_size
+            if batch_size is not None
+            else getattr(settings, "embed_batch_size", DEFAULT_EMBEDDING_BATCH_SIZE)
+        )
+        if resolved_batch <= 0:
             raise ValueError("batch_size must be greater than 0.")
+        resolved_concurrency = (
+            concurrency
+            if concurrency is not None
+            else getattr(settings, "embed_concurrency", DEFAULT_EMBED_CONCURRENCY)
+        )
 
         self._model = settings.openai_embedding_model
-        self._batch_size = batch_size
+        self._batch_size = resolved_batch
+        self._concurrency = max(1, resolved_concurrency)
         self._client = client or _create_openai_client(
             str(api_key),
             base_url=base_url,
@@ -59,14 +76,24 @@ class EmbeddingService:
         )
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """Create embeddings for texts while preserving input order."""
+        """Create embeddings for texts while preserving input order.
+
+        Multiple batches are embedded concurrently (embedding round-trips are the
+        indexing bottleneck); ThreadPoolExecutor.map preserves batch order.
+        """
         _validate_texts(texts)
         if not texts:
             return []
 
+        batches = _batched(texts, self._batch_size)
+        if len(batches) == 1:
+            return self._embed_batch(batches[0])
+
         embeddings: list[list[float]] = []
-        for batch in _batched(texts, self._batch_size):
-            embeddings.extend(self._embed_batch(batch))
+        workers = min(self._concurrency, len(batches))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for batch_embeddings in pool.map(self._embed_batch, batches):
+                embeddings.extend(batch_embeddings)
         return embeddings
 
     def _embed_batch(self, batch: list[str]) -> list[list[float]]:

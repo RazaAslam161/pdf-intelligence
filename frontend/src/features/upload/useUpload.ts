@@ -13,7 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, getConfig, indexPdfs } from "../../lib/api";
-import type { ConfigResponse } from "../../lib/types";
+import type { ConfigResponse, IndexFileResult } from "../../lib/types";
 import {
   applyFileCountCap,
   validateFiles,
@@ -93,6 +93,73 @@ export interface UseUploadOptions {
   onBatchComplete?: () => void;
 }
 
+export interface DrainCallbacks {
+  /** Upload one file and resolve with the server's per-file result. */
+  upload: (file: File) => Promise<IndexFileResult | undefined>;
+  /** Apply a status patch to the row with the given id. */
+  patch: (id: string, patch: Partial<UploadFile>) => void;
+}
+
+/**
+ * Drain a queue of rows, uploading each row's file in order and mapping the
+ * result back onto the row. Mutates `queue` (via shift) so rows pushed mid-drain
+ * are still handled. Each file is isolated: a throw is recorded on its row and
+ * draining continues. Returns whether any file was processed.
+ *
+ * Pure (no React) so the core upload loop is unit-tested directly — the earlier
+ * regression (rows stuck on "indexing", never uploaded) lived exactly here.
+ */
+export async function drainUploadQueue(
+  queue: UploadFile[],
+  callbacks: DrainCallbacks,
+): Promise<boolean> {
+  let processedAny = false;
+  while (queue.length > 0) {
+    const row = queue.shift();
+    if (!row || !row.file) continue;
+    processedAny = true;
+    callbacks.patch(row.id, { status: "indexing" });
+    try {
+      const result = await callbacks.upload(row.file);
+      if (result) {
+        const status: FileStatus =
+          result.status === "indexed"
+            ? "indexed"
+            : result.status === "rejected"
+              ? "rejected"
+              : result.status === "unsupported"
+                ? "unsupported"
+                : "failed";
+        callbacks.patch(row.id, {
+          status,
+          pageCount: result.page_count,
+          chunkCount: result.chunk_count,
+          detail:
+            status === "rejected"
+              ? "Rejected by the server limits."
+              : status === "failed"
+                ? "The server could not index this file."
+                : undefined,
+        });
+      } else {
+        callbacks.patch(row.id, {
+          status: "failed",
+          detail: "No result returned for this file.",
+        });
+      }
+    } catch (err: unknown) {
+      const detail =
+        err instanceof ApiError
+          ? `Upload failed (${err.status}).`
+          : err instanceof Error
+            ? err.message
+            : "Upload failed.";
+      callbacks.patch(row.id, { status: "failed", detail });
+    }
+  }
+  return processedAny;
+}
+
 export function useUpload(options: UseUploadOptions = {}): UseUploadResult {
   const { onBatchComplete } = options;
   const [config, setConfig] = useState<ConfigResponse | null>(null);
@@ -101,7 +168,11 @@ export function useUpload(options: UseUploadOptions = {}): UseUploadResult {
   const [uploading, setUploading] = useState(false);
   const [skippedNote, setSkippedNote] = useState<SkippedNote | null>(null);
 
-  // A pump may already be draining the queue; guard against starting a second.
+  // Rows awaiting upload, drained one at a time. Held in a ref (not state) so the
+  // drainer reads the queue synchronously — reading it back through a setState
+  // updater does not work, because React runs the updater asynchronously.
+  const queueRef = useRef<UploadFile[]>([]);
+  // A drain may already be running; guard against starting a second.
   const pumpingRef = useRef(false);
 
   // Keep the latest callback without making `pump` depend on it (which would
@@ -139,87 +210,20 @@ export function useUpload(options: UseUploadOptions = {}): UseUploadResult {
   );
 
   /**
-   * Drain the queue one file at a time. Re-reads the latest state via the
-   * functional setState so newly added rows are picked up. Each file is fully
-   * isolated: a throw is caught and recorded on that row, then we continue.
+   * Drain the upload queue (a ref, read synchronously) one file at a time, then
+   * refresh the live store once if anything was processed. A guarded singleton:
+   * rows queued mid-drain are picked up by the same loop.
    */
-  const pump = useCallback(async () => {
+  const drain = useCallback(async () => {
     if (pumpingRef.current) return;
     pumpingRef.current = true;
     setUploading(true);
-    // Did this drain attempt to index any file? Drives the post-batch refresh.
-    let processedAny = false;
-
-    // Pull the next queued row off the current state snapshot.
-    const takeNext = (): UploadFile | null => {
-      let found: UploadFile | null = null;
-      setFiles((prev) => {
-        const next = prev.find((f) => f.status === "queued");
-        if (next) {
-          found = next;
-          return prev.map((f) =>
-            f.id === next.id ? { ...f, status: "indexing" as const } : f,
-          );
-        }
-        return prev;
-      });
-      return found;
-    };
-
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const current = takeNext();
-      if (!current || !current.file) break;
-      processedAny = true;
-
-      try {
-        const res = await indexPdfs([current.file]);
-        const result = res.results[0];
-        if (result) {
-          const status: FileStatus =
-            result.status === "indexed"
-              ? "indexed"
-              : result.status === "rejected"
-                ? "rejected"
-                : result.status === "unsupported"
-                  ? "unsupported"
-                  : "failed";
-          patchFile(current.id, {
-            status,
-            pageCount: result.page_count,
-            chunkCount: result.chunk_count,
-            detail:
-              status === "rejected"
-                ? "Rejected by the server limits."
-                : status === "failed"
-                  ? "The server could not index this file."
-                  : undefined,
-          });
-        } else {
-          patchFile(current.id, {
-            status: "failed",
-            detail: "No result returned for this file.",
-          });
-        }
-      } catch (err: unknown) {
-        // Isolated failure: record it and keep draining the rest.
-        const detail =
-          err instanceof ApiError
-            ? `Upload failed (${err.status}).`
-            : err instanceof Error
-              ? err.message
-              : "Upload failed.";
-        patchFile(current.id, { status: "failed", detail });
-      }
-    }
-
+    const processedAny = await drainUploadQueue(queueRef.current, {
+      upload: async (file) => (await indexPdfs([file])).results[0],
+      patch: patchFile,
+    });
     pumpingRef.current = false;
     setUploading(false);
-
-    // The batch is done draining. If we touched at least one file, let the
-    // caller refresh the live store (it is the source of truth, not the
-    // per-file rows). Failures don't block the refresh — the store reflects
-    // whatever the server actually persisted.
     if (processedAny) {
       onBatchCompleteRef.current?.();
     }
@@ -263,12 +267,15 @@ export function useUpload(options: UseUploadOptions = {}): UseUploadResult {
 
       setFiles((prev) => [...prev, ...rows]);
 
-      // 4. Kick the pump if anything is uploadable.
-      if (rows.some((r) => r.status === "queued")) {
-        void pump();
+      // 4. Queue the uploadable rows (with their File objects) and kick the
+      // drainer. The queue lives in a ref so the drainer reads it reliably.
+      const queued = rows.filter((r) => r.status === "queued" && r.file);
+      if (queued.length > 0) {
+        queueRef.current.push(...queued);
+        void drain();
       }
     },
-    [config, pump],
+    [config, drain],
   );
 
   const clear = useCallback(() => {

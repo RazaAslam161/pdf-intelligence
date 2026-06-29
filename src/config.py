@@ -17,7 +17,12 @@ DEFAULT_RETRIEVAL_TOP_K = 4
 # query. Chroma cosine distance is 1 - cosine_similarity (range 0..2); lower is
 # closer. Chunks above the threshold are treated as "not found" so off-topic
 # questions return the grounded no-context answer instead of confident citations.
-DEFAULT_RETRIEVAL_MAX_DISTANCE = 0.75
+# Calibrated against text-embedding-3-small: on-topic questions (incl. generic
+# ones like "summarize this document") land ~0.64-0.82, while genuinely off-topic
+# questions land ~0.92+, so 0.85 sits in the gap — answers real questions about a
+# document while still rejecting unrelated ones. The LLM grounding prompt is the
+# second line of defence. Tune via RETRIEVAL_MAX_DISTANCE (0 disables filtering).
+DEFAULT_RETRIEVAL_MAX_DISTANCE = 0.85
 # Indexing limits (P0-2): guard against cost blow-up / memory DoS from oversized
 # uploads. A value <= 0 disables that individual limit.
 DEFAULT_MAX_UPLOAD_MB = 25
@@ -30,6 +35,11 @@ DEFAULT_MAX_FILES_PER_RUN = 20
 DEFAULT_REQUEST_TIMEOUT = 30.0
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_MAX_OUTPUT_TOKENS = 1024
+# Indexing throughput: chunks per embedding request and how many requests run
+# concurrently. Embedding round-trips dominate indexing time, so batching wider
+# and fanning out cuts wall-clock sharply for multi-batch documents.
+DEFAULT_EMBED_BATCH_SIZE = 256
+DEFAULT_EMBED_CONCURRENCY = 8
 MISSING_API_KEY_MESSAGE = (
     "OPENAI_API_KEY is missing. Add it to your .env file before using OpenAI features."
 )
@@ -55,6 +65,8 @@ class Settings:
     request_timeout: float = DEFAULT_REQUEST_TIMEOUT
     max_retries: int = DEFAULT_MAX_RETRIES
     max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS
+    embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE
+    embed_concurrency: int = DEFAULT_EMBED_CONCURRENCY
     validation_error: str | None = None
 
     @property
@@ -106,6 +118,11 @@ def get_settings() -> Settings:
         max_output_tokens=_get_int_env(
             "MAX_OUTPUT_TOKENS",
             DEFAULT_MAX_OUTPUT_TOKENS,
+        ),
+        embed_batch_size=_get_int_env("EMBED_BATCH_SIZE", DEFAULT_EMBED_BATCH_SIZE),
+        embed_concurrency=_get_int_env(
+            "EMBED_CONCURRENCY",
+            DEFAULT_EMBED_CONCURRENCY,
         ),
         validation_error=validation_error,
     )

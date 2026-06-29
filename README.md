@@ -122,7 +122,7 @@ make install
 | `CHUNK_SIZE` | No | Maximum chunk size used during text splitting. Defaults to `1000`. |
 | `CHUNK_OVERLAP` | No | Character overlap between adjacent chunks. Defaults to `150`. |
 | `RETRIEVAL_TOP_K` | No | Number of chunks retrieved for each question. Defaults to `4`. |
-| `RETRIEVAL_MAX_DISTANCE` | No | Max cosine distance for a retrieved chunk to count as relevant; chunks beyond it are dropped so off-topic questions return "no answer found" instead of citing irrelevant text. Defaults to `0.75`. `0` disables filtering. |
+| `RETRIEVAL_MAX_DISTANCE` | No | Max cosine distance for a retrieved chunk to count as relevant; chunks beyond it are dropped so off-topic questions return "no answer found" instead of citing irrelevant text. Defaults to `0.85` (calibrated for `text-embedding-3-small`: answers real questions about a document, incl. "summarize this", while rejecting unrelated ones). `0` disables filtering. |
 | `MAX_UPLOAD_MB` | No | Maximum size per uploaded PDF. Defaults to `25`. Keep in sync with `server.maxUploadSize` in `.streamlit/config.toml`. `0` disables. |
 | `MAX_PAGES_PER_PDF` | No | Maximum pages indexed per PDF. Defaults to `500`. `0` disables. |
 | `MAX_CHUNKS_PER_RUN` | No | Maximum chunks embedded per document before rejection (cost guard). Defaults to `5000`. `0` disables. |
@@ -130,6 +130,8 @@ make install
 | `REQUEST_TIMEOUT` | No | Per-request OpenAI deadline in seconds (SDK-enforced). Defaults to `30`. |
 | `MAX_RETRIES` | No | OpenAI client automatic retry budget. Defaults to `2`. |
 | `MAX_OUTPUT_TOKENS` | No | Max tokens per generated answer. Defaults to `1024`. |
+| `EMBED_BATCH_SIZE` | No | Chunks per embedding request. Defaults to `256`. |
+| `EMBED_CONCURRENCY` | No | Embedding requests run in parallel during indexing. Defaults to `8`. |
 | `LOG_LEVEL` | No | Application log level (`DEBUG`/`INFO`/`WARNING`/`ERROR`). Defaults to `INFO`. |
 
 Use `.env.example` as the reference for variable names and defaults. Keep secrets in `.env` locally or in your hosting provider's secret manager.

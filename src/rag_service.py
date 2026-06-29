@@ -22,9 +22,14 @@ GROUNDING_INSTRUCTIONS = (
     "Use only the provided PDF context. "
     "If the answer is not present in the context, say you could not find the "
     "answer in the uploaded documents. "
-    "When a sentence is supported by the context, cite the source inline with its "
-    "bracketed number, e.g. [1], matching the numbered sources you are given. "
-    "Only cite the numbered sources provided."
+    "When a sentence is supported by the context, cite the source inline using a "
+    "single bracketed number matching the numbered sources, like [1]. For multiple "
+    "sources use separate brackets, like [1][2]. Do not write the word 'Source' and "
+    "do not put more than one number in a bracket (write [1][2], never [1, 2]). "
+    "Only cite the numbered sources provided. "
+    "Write in plain prose. Do not use any markdown formatting: no asterisks for "
+    "bold or italic, no underscores, no headings, and no bullet or numbered-list "
+    "syntax."
 )
 NO_CONTEXT_ANSWER = "I could not find the answer in the uploaded documents."
 
@@ -47,6 +52,8 @@ class RAGSettings(Protocol):
     request_timeout: float
     max_retries: int
     max_output_tokens: int
+    embed_batch_size: int
+    embed_concurrency: int
 
 
 class EmbeddingServiceLike(Protocol):
@@ -115,6 +122,7 @@ class RAGService:
         # Enforce the size cap before parsing so an oversized upload never
         # reaches pypdf or the paid embedding API.
         validate_pdf_size(len(pdf_bytes), file_name, self.settings)
+        embed_ms = 0.0
         try:
             pages = load_pdf_pages(pdf_bytes, file_name)
             validate_page_count(len(pages), file_name, self.settings)
@@ -124,9 +132,11 @@ class RAGService:
                 chunk_overlap=self.settings.chunk_overlap,
             )
             validate_chunk_count(len(chunks), file_name, self.settings)
+            embed_start = perf_counter()
             embeddings = self.embedding_service.embed_texts(
                 [chunk.text for chunk in chunks]
             )
+            embed_ms = (perf_counter() - embed_start) * 1000
             self.vector_store.add_chunks(chunks, embeddings, tenant_id=tenant_id)
         except IndexingLimitError:
             raise
@@ -142,11 +152,12 @@ class RAGService:
             pdf_bytes,
         )
         logger.info(
-            "index request_id=%s file=%s pages=%d chunks=%d",
+            "index request_id=%s file=%s pages=%d chunks=%d embed_ms=%.1f",
             request_id,
             file_name,
             len(pages),
             len(chunks),
+            embed_ms,
         )
         return IndexResult(
             file_name=file_name,

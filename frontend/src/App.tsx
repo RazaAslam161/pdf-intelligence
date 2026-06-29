@@ -20,12 +20,14 @@ import styles from "./App.module.css";
 type View = "chat" | "documents";
 
 /**
- * Dev-only fallback: when VITE_API_BASE is unset we have no backend to talk to,
- * so SIMULATE streaming from the canned sample (a few chunks over time) for
- * local visual development. The DEFAULT path (VITE_API_BASE set) always calls
- * the real streaming api.askStream().
+ * Sample mode is an EXPLICIT opt-in (set VITE_USE_SAMPLE=true) for local visual
+ * development without a backend: it SIMULATES streaming from the canned sample.
+ * By default the app calls the real streaming api.askStream() — consistent with
+ * api.ts, which already defaults the API base to http://localhost:8000. (The old
+ * gate keyed on VITE_API_BASE being unset, which made answers fake even though
+ * uploads were hitting the real backend — the "seeded answer" bug.)
  */
-const USE_SAMPLE = import.meta.env.VITE_API_BASE === undefined;
+const USE_SAMPLE = import.meta.env.VITE_USE_SAMPLE === "true";
 
 /** Split the sample answer into a handful of chunks for simulated streaming. */
 function sampleChunks(answer: string, parts = 6): string[] {

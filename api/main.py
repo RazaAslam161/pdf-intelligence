@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -68,10 +69,28 @@ def to_sources(chunks: Sequence[RetrievedChunk]) -> list[Source]:
     return sources
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Warm the singletons on boot so the first request doesn't pay cold-start.
+
+    Builds the Chroma client and the embedding/OpenAI clients and primes the
+    embedding HTTP connection. Best-effort: a missing/invalid key logs a warning
+    and never blocks startup (health stays up).
+    """
+    try:
+        get_vector_store()
+        get_rag_service().embedding_service.embed_texts(["warmup"])
+        logger.info("startup_warmup ok")
+    except Exception as exc:
+        logger.warning("startup_warmup skipped: %s", exc)
+    yield
+
+
 app = FastAPI(
     title="PDF Intelligence API",
     version="0.1.0",
     description="Grounded question answering over uploaded PDFs with citations.",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -171,12 +190,16 @@ def ask(
 
 
 @app.post("/index", response_model=IndexResponse)
-async def index(
+def index(
     files: list[UploadFile] = File(...),
     service: RAGService = Depends(get_rag_service),
     tenant_id: str = Depends(get_tenant_id),
 ) -> IndexResponse:
-    """Index uploaded PDFs for the caller's tenant; each file is isolated."""
+    """Index uploaded PDFs for the caller's tenant; each file is isolated.
+
+    Declared sync so FastAPI runs it in a worker thread: index_pdf does blocking
+    work (pypdf, embedding HTTP, Chroma) that must not block the event loop.
+    """
     results: list[IndexFileResult] = []
     for upload in files:
         file_name = upload.filename or "upload.pdf"
@@ -184,7 +207,7 @@ async def index(
             results.append(_failed_result(file_name, "unsupported"))
             continue
 
-        data = await upload.read()
+        data = upload.file.read()
         # Per-file isolation (A6): each file gets its own try/except so one bad
         # file never aborts the batch; successes are already persisted by the
         # time a later file fails.

@@ -49,10 +49,23 @@ def test_embed_texts_batches_requests_and_preserves_order() -> None:
     embeddings = service.embed_texts(["one", "two", "three"])
 
     assert embeddings == [[3.0, 0.0], [3.0, 1.0], [5.0, 0.0]]
-    assert client.embeddings.calls == [
-        {"model": "test-embedding-model", "input": ["one", "two"]},
-        {"model": "test-embedding-model", "input": ["three"]},
-    ]
+    # Batches run concurrently, so completion order is non-deterministic; assert
+    # the requests sent regardless of order.
+    assert all(c["model"] == "test-embedding-model" for c in client.embeddings.calls)
+    inputs = sorted(
+        (c["input"] for c in client.embeddings.calls), key=len, reverse=True
+    )
+    assert inputs == [["one", "two"], ["three"]]
+
+
+def test_embed_texts_preserves_order_across_many_batches() -> None:
+    """Output order stays aligned with input order across several parallel batches."""
+    service = EmbeddingService(FakeSettings(), client=FakeClient(), batch_size=2)
+
+    out = service.embed_texts(["a", "bb", "ccc", "dddd", "eeeee"])
+
+    # FakeEmbeddingsEndpoint encodes len(text) as the first vector component.
+    assert [vec[0] for vec in out] == [1.0, 2.0, 3.0, 4.0, 5.0]
 
 
 def test_embed_texts_allows_injected_client_without_api_key() -> None:

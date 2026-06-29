@@ -25,6 +25,8 @@ CONFIG_ENV_KEYS = {
     "REQUEST_TIMEOUT",
     "MAX_RETRIES",
     "MAX_OUTPUT_TOKENS",
+    "EMBED_BATCH_SIZE",
+    "EMBED_CONCURRENCY",
 }
 
 
@@ -51,7 +53,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.chunk_size, 1000)
         self.assertEqual(settings.chunk_overlap, 150)
         self.assertEqual(settings.retrieval_top_k, 4)
-        self.assertEqual(settings.retrieval_max_distance, 0.75)
+        self.assertEqual(settings.retrieval_max_distance, 0.85)
         self.assertEqual(settings.max_upload_mb, 25)
         self.assertEqual(settings.max_pages_per_pdf, 500)
         self.assertEqual(settings.max_chunks_per_run, 5000)
@@ -59,6 +61,8 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.request_timeout, 30.0)
         self.assertEqual(settings.max_retries, 2)
         self.assertEqual(settings.max_output_tokens, 1024)
+        self.assertEqual(settings.embed_batch_size, 256)
+        self.assertEqual(settings.embed_concurrency, 8)
         self.assertIsNone(settings.validation_error)
         self.assertTrue(settings.has_openai_api_key)
 
@@ -81,6 +85,8 @@ class SettingsTests(unittest.TestCase):
             "REQUEST_TIMEOUT": "15",
             "MAX_RETRIES": "5",
             "MAX_OUTPUT_TOKENS": "2048",
+            "EMBED_BATCH_SIZE": "64",
+            "EMBED_CONCURRENCY": "4",
         }
 
         with patch("src.config.load_dotenv"), patch.dict(os.environ, env, clear=True):
@@ -101,6 +107,8 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.request_timeout, 15.0)
         self.assertEqual(settings.max_retries, 5)
         self.assertEqual(settings.max_output_tokens, 2048)
+        self.assertEqual(settings.embed_batch_size, 64)
+        self.assertEqual(settings.embed_concurrency, 4)
 
     def test_missing_api_key_sets_validation_error(self) -> None:
         """A missing API key should be exposed as a user-facing message."""
